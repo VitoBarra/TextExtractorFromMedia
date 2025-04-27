@@ -75,6 +75,26 @@ for folder_name, video_list in folder_video_map.items():
         # Get the scrollable container
         text_area = driver.find_element(By.ID, "textArea")
 
+
+        # Scroll until no more new content
+        last_height = 0
+        while True:
+            # Scroll to bottom
+            driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", text_area)
+
+            # Wait for content to load
+            time.sleep(1)
+
+            # Get the new height
+            new_height = driver.execute_script("return arguments[0].scrollHeight", text_area)
+
+            if new_height == last_height:
+                break
+
+            last_height = new_height
+
+        print("Finished scrolling!")
+
         # Save the HTML output
         # At this point, all paragraphs should be loaded
         text_area_HTML = text_area.get_attribute("innerHTML")
