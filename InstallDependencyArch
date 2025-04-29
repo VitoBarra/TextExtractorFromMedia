@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# List of required packages
+packages=(uchardet lynx coreutils)
+
+# Install using pacman
+echo "Installing dependencies: ${packages[*]}"
+sudo pacman -S --needed --noconfirm "${packages[@]}"
+
+# iconv is provided by glibc, which is already installed on all Arch systems
+# But we check just in case it's broken/missing (very unlikely)
+if ! command -v iconv >/dev/null 2>&1; then
+    echo "ERROR: 'iconv' not found. It should be part of glibc. Check your installation."
+    exit 1
+fi
+
+echo "✅ All dependencies installed successfully."

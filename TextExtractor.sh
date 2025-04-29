@@ -10,12 +10,16 @@ fi
 input_file="$1"
 output_file="$2"
 
+# Detect encoding using uchardet
+encoding=$(uchardet "$input_file" | tr '[:upper:]' '[:lower:]')
 
-# Detect the encoding
-encoding=$(file -bi "$input_file" | sed -n 's/.*charset=\(.*\)/\1/p')
+# Normalize or fallback to UTF-8 if uncertain
+if [ -z "$encoding" ] || [[ "$encoding" =~ unknown|ascii ]]; then
+    echo "Encoding uncertain or unknown, defaulting to UTF-8"
+    encoding="utf-8"
+fi
 
-# Normalize encoding name to lowercase
-encoding=$(echo "$encoding" | tr '[:upper:]' '[:lower:]')
+echo "Encoding detected for $input_file: $encoding"
 
 # Only convert if it's not already utf-8
 if [ "$encoding" != "utf-8" ]; then
