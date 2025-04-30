@@ -1,3 +1,4 @@
 ﻿selenium
 undetected-chromedriver
 seleniumbase
+swiftshadow>2.0

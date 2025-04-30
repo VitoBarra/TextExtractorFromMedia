@@ -6,14 +6,17 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 from seleniumbase import Driver
-
+from swiftshadow.classes import ProxyInterface
+from ProxyUtil import *
 
 
 
 # --- Settings ---
-VIDEO_FOLDER = "data"  # Change this
+VIDEO_FOLDER = "data"
 OUTPUT_FOLDER = "transcript"                # Where HTML files will be saved
 UPLOAD_URL = "https://vizard.ai/upload?from=video-to-text&tool-page=%2Fen%2Ftools%2Fvideo-to-text"         # Change this
+
+USE_PROXY = True
 WAIT_TIME_AFTER_UPLOAD = 3600                  # Adjust depending on upload processing time
 
 # Allowed video/audio extensions
@@ -23,13 +26,25 @@ ALLOWED_EXTENSIONS = (".mp4", ".mov", ".3gp", ".avi", ".mp3", ".wav", ".m4a")
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 
+if USE_PROXY:
+    proxy_manager = ProxyInterface(
+        countries=[],
+        protocol="http",
+        autoRotate=True,
+    )
 
-# initialize the driver in GUI mode with UC enabled
-driver = Driver(uc=True, headless=False)
-driver.uc_open_with_reconnect(UPLOAD_URL , 6)
+    while True:
+        proxy = proxy_manager.get()
+        if proxy is None:
+            print("can't find proxy")
+            exit()
+        if test_proxy(proxy.ip,proxy.port):
+            driver = Driver(uc=True, headless=False, proxy=f"{proxy.ip}:{proxy.port}")
+            break
+else:
+    # initialize the driver in GUI mode with UC enabled
+    driver = Driver(uc=True, headless=False)
 
-# Save the current URL
-start_url = driver.current_url
 
 # Initialize an empty dictionary to store folder names and video file paths
 folder_video_map = {}
@@ -41,10 +56,11 @@ for root, dirs, files in os.walk(VIDEO_FOLDER):
 
     # If there are any video files in this folder, add them to the map
     if video_files:
-        folder_name = os.path.basename(root)  # Get the folder name (just the last part of the path)
+        folder_name = os.path.basename(root)  # Get the parent folder name (just the last part of the path)
+        if folder_name.lower() == "data":
+            continue
         folder_video_map[folder_name] = [os.path.abspath(os.path.join(root, f)) for f in video_files]
 
-# folder_video_map now contains the folder names as keys and lists of file paths as values
 
 # --- Upload each file ---
 for folder_name, video_list in folder_video_map.items():
@@ -52,7 +68,7 @@ for folder_name, video_list in folder_video_map.items():
         print(f"Uploading file (absolute path): {videoPath}")
 
         # Refresh the page before each upload (optional, depends on the site)
-        driver.get(UPLOAD_URL)
+        driver.uc_open_with_reconnect(UPLOAD_URL, 6)
         time.sleep(2)
 
         print(f"finding the element to upload the file")
