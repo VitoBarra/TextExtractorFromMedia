@@ -1,5 +1,7 @@
 ﻿import os
 import time
+
+from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
@@ -76,30 +78,40 @@ for folder_name, video_list in folder_video_map.items():
         text_area = driver.find_element(By.ID, "textArea")
 
 
-        # Scroll until no more new content
-        last_height = 0
+
+        # actions = ActionChains(driver)
+        # actions.move_to_element(text_area).scroll_by_amount()
+        # # Scroll until no more new content
+
+        i = 0
+
         while True:
-            # Scroll to bottom
-            driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", text_area)
+            try:
+                # Try to find paragraph by its ID
+                paragraph = text_area.find_element(By.ID, f"paragraph_{i}")
 
-            # Wait for content to load
-            time.sleep(1)
+                # Scroll this paragraph into view
+                driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", paragraph)
+                time.sleep(0.5)  # Small pause to allow loading
 
-            # Get the new height
-            new_height = driver.execute_script("return arguments[0].scrollHeight", text_area)
+                print(f"Scrolled to paragraph_{i}")
 
-            if new_height == last_height:
+                i += 1  # Go to the next paragraph
+
+            except Exception:
+                # If no paragraph with the next ID is found, we assume we finished
+                print(f"No more paragraphs found after paragraph_{i-1}. Finished scrolling.")
                 break
 
-            last_height = new_height
+        print("Scrolling complete.")
 
-        print("Finished scrolling!")
+
 
         # Save the HTML output
         # At this point, all paragraphs should be loaded
         text_area_HTML = text_area.get_attribute("innerHTML")
 
-        html_filename = os.path.join(OUTPUT_FOLDER +"/" + folder_name, f"{os.path.splitext(videoPath)[0]}.html")
+        html_filename = os.path.join(OUTPUT_FOLDER, folder_name, f"{os.path.splitext(os.path.basename(videoPath))[0]}.html")
         with open(html_filename, "w", encoding="utf-8") as f:
             f.write(text_area_HTML)
 
