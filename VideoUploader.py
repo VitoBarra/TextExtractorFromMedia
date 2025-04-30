@@ -4,140 +4,176 @@ import time
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 from seleniumbase import Driver
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from ProxyUtil import *
-import random as rnd
+from VideoTranscriptJobDescriptor import *
+
+
 
 
 
 # --- Settings ---
-VIDEO_FOLDER = "data"
-OUTPUT_FOLDER = "transcript"                # Where HTML files will be saved
-UPLOAD_URL = "https://vizard.ai/upload?from=video-to-text&tool-page=%2Fen%2Ftools%2Fvideo-to-text"         # Change this
-
-WAIT_TIME_AFTER_UPLOAD = 3600                  # Adjust depending on upload processing time
-
-# Allowed video/audio extensions
-ALLOWED_EXTENSIONS = (".mp4", ".mov", ".3gp", ".avi", ".mp3", ".wav", ".m4a")
+UPLOAD_URL = "https://vizard.ai/upload?from=video-to-text&tool-page=%2Fen%2Ftools%2Fvideo-to-text"
+WAIT_TIME_AFTER_UPLOAD = 3600
 
 
-def upload_video(proxy:object = None):
-    if proxy is not None:
-        proxy_string =f"{proxy['ip']}:{proxy['port']}"
-        print(f"Using proxy: {proxy_string}")
-        driver = Driver(uc=True, headless=False, proxy=proxy_string )
+
+
+def upload_video(job:VideoTranscriptJobDescriptor, proxy:object = None):
+    job.Lock.acquire()
+    if job.IsCompleted:
+        job.Lock.release()
+        return
     else:
-        # initialize the driver in GUI mode with UC enabled
-        driver = Driver(uc=True, headless=False)
+        job.Lock.release()
+
+    threadName =threading.get_ident()
 
 
-    # Initialize an empty dictionary to store folder names and video file paths
-    folder_video_map = {}
+    ConditionSettedByMe = False
 
-    # Loop through subfolders and files using os.walk
-    for root, dirs, files in os.walk(VIDEO_FOLDER):
-        # Filter for allowed video files in the current directory
-        video_files = [f for f in files if f.lower().endswith(ALLOWED_EXTENSIONS)]
+    driver = None
+    try:
+        if proxy is not None:
+            proxy_string =f"{proxy['ip']}:{proxy['port']}"
+            driver = Driver(uc=True, headless=False, proxy=proxy_string )
+        else:
+            # initialize the driver in GUI mode with UC enabled
+            driver = Driver(uc=True, headless=False)
 
-        # If there are any video files in this folder, add them to the map
-        if video_files:
-            folder_name = os.path.basename(root)  # Get the parent folder name (just the last part of the path)
-            if folder_name.lower() == "data":
-                continue
-            folder_video_map[folder_name] = [os.path.abspath(os.path.join(root, f)) for f in video_files]
+        # Refresh the page before each upload (optional, depends on the site)
+        driver.uc_open_with_reconnect(UPLOAD_URL, 6)
 
+        # Find file input and upload
+        time.sleep(2)
+        file_input = driver.find_element(By.ID, "file-input")
+        file_input.send_keys(job.VideoName)
 
-    # --- Upload each file ---
-    for folder_name, video_list in folder_video_map.items():
-        for videoPath in video_list:
-            print(f"Uploading file (absolute path): {videoPath}")
+        if job.Lock.locked():
+            print(f"{threadName}: Waiting on lock acquisition")
 
-            # Refresh the page before each upload (optional, depends on the site)
-            driver.uc_open_with_reconnect(UPLOAD_URL, 6)
-            time.sleep(2)
+        job.Lock.acquire()
+        ConditionSettedByMe = True
+        if job.IsCompleted:
+            return
+        print(f"{threadName}: Waiting that the upload finishes...blocking other instances")
 
-            print(f"finding the element to upload the file")
-            # Find file input and upload
-            file_input = driver.find_element(By.ID, "file-input")
-            file_input.send_keys(videoPath)
+        # Locate the element by text and class
+        upload_button = WebDriverWait(driver, WAIT_TIME_AFTER_UPLOAD).until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'win-confirm-button') and contains(text(), 'Upload')]")))
 
-            # Wait for upload & processing
-            print(f"Waiting with timeout: {WAIT_TIME_AFTER_UPLOAD} seconds...")
-            # Locate the element by text and class
-            upload_button = WebDriverWait(driver, WAIT_TIME_AFTER_UPLOAD).until(
-                EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'win-confirm-button') and contains(text(), 'Upload')]"))
-            )
-            upload_button.click()
-            driver.uc_gui_click_captcha()
+        upload_button.click()
+        driver.uc_gui_click_captcha()
+        print (f"{threadName}: waiting for transcript button")
+        # Wait for the URL to change
+        transcript_div = WebDriverWait(driver, WAIT_TIME_AFTER_UPLOAD).until(EC.element_to_be_clickable((By.ID, "transcript_button")))
 
-            # Wait for the URL to change
-            transcript_div = WebDriverWait(driver, WAIT_TIME_AFTER_UPLOAD).until(EC.element_to_be_clickable((By.ID, "transcript_button")))
+        # Click the div
+        transcript_div.click()
+        # Get the scrollable container
+        text_area = driver.find_element(By.ID, "textArea")
 
-            # Click the div
-            transcript_div.click()
-            # Get the scrollable container
-            text_area = driver.find_element(By.ID, "textArea")
+        i = 0
 
+        while True:
+            try:
+                # Try to find paragraph by its ID
+                paragraph = text_area.find_element(By.ID, f"paragraph_{i}")
 
+                # Scroll this paragraph into view
+                driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", paragraph)
+                time.sleep(0.5)  # Small pause to allow loading
 
-            # actions = ActionChains(driver)
-            # actions.move_to_element(text_area).scroll_by_amount()
-            # # Scroll until no more new content
+                print(f"{threadName}: Scrolled to paragraph_{i}")
 
-            i = 0
+                i += 1  # Go to the next paragraph
 
-            while True:
-                try:
-                    # Try to find paragraph by its ID
-                    paragraph = text_area.find_element(By.ID, f"paragraph_{i}")
+            except Exception:
+                # If no paragraph with the next ID is found, we assume we finished
+                print(f"{threadName}: No more paragraphs found after paragraph_{i-1}. Finished scrolling.")
+                break
 
-                    # Scroll this paragraph into view
-                    driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", paragraph)
-                    time.sleep(0.5)  # Small pause to allow loading
-
-                    print(f"Scrolled to paragraph_{i}")
-
-                    i += 1  # Go to the next paragraph
-
-                except Exception:
-                    # If no paragraph with the next ID is found, we assume we finished
-                    print(f"No more paragraphs found after paragraph_{i-1}. Finished scrolling.")
-                    break
-
-            print("Scrolling complete.")
+        print(f"{threadName}: Scrolling complete.")
 
 
 
-            # Save the HTML output
-            # At this point, all paragraphs should be loaded
-            text_area_HTML = text_area.get_attribute("innerHTML")
+        # Save the HTML output
+        # At this point, all paragraphs should be loaded
+        text_area_HTML = text_area.get_attribute("innerHTML")
 
-            html_filename = os.path.join(OUTPUT_FOLDER, folder_name, f"{os.path.splitext(os.path.basename(videoPath))[0]}.html")
-            with open(html_filename, "w", encoding="utf-8") as f:
-                f.write(text_area_HTML)
+        html_filename = os.path.join(OUTPUT_FOLDER,job.VideoProjectFolder, f"{os.path.splitext(os.path.basename(job.VideoName))[0]}.html")
+        with open(html_filename, "w", encoding="utf-8") as f:
+            f.write(text_area_HTML)
 
-            print(f"Saved HTML to {html_filename}\n")
+        print(f"{threadName}: Saved HTML to {html_filename}\n")
+        job.IsCompleted = True
+    except Exception:
+        raise
+    finally:
+        # --- Cleanup ---
+        if driver is not None:
+            driver.quit()
+        if ConditionSettedByMe:
+            job.Lock.release()
+            print(f"{threadName}: lock released for job {job}")
 
-    # --- Cleanup ---
-    driver.quit()
-    print("All done!")
 
 
+
+
+
+def try_upload(jobDesc:VideoTranscriptJobDescriptor, proxy:str) ->(str,bool):
+    try:
+        upload_video(jobDesc, proxy)
+        return proxy,True  # Success
+    except Exception:
+        return proxy,False
 
 
 if __name__ == "__main__":
     # --- Create output folder if it doesn't exist ---
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+    video_jobs = GenerateJobsFromVideo()
+
 
     proxy_list = fetchHTTPS_proxies()
     # proxy_list = fetch_proxies()
     # proxy_list = fetch_proxy_swiftshadow()
 
 
-    for proxy in proxy_list:
-        try:
-            upload_video(proxy)
+    MAX_ATTEMPTS = 1
+
+    # Track how many times each job was attempted
+    job_attempts = {job: 0 for job in video_jobs}
+    while True:
+        incomplete_jobs = [job for job in video_jobs if not job.IsCompleted and job_attempts[job] < MAX_ATTEMPTS]
+
+        if not incomplete_jobs:
+            print("All jobs completed (or reached max attempts).")
             break
-        except Exception :
-            print(f"failed to upload with proxy {proxy['ip']}:{proxy['port']}")
 
+        for job in incomplete_jobs:
+            if job.Lock.locked():
+                continue
+            print(f"Trying job: {job}")
 
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                proxyTried =0
+                futures = {executor.submit(try_upload, job, proxy): proxy for proxy in proxy_list}
+                proxy_to_try = len(proxy_list)
+                for future in as_completed(futures):
+                    proxyTried= proxyTried + 1
+                    proxy , success = future.result()
+                    if success:
+                        print(f"job {job} succeeded with proxy {proxy['ip']}:{proxy['port']}")
+                        job.IsCompleted = True
+                        break
+                    else:
+                        print(f"job progress, proxy tried:  {proxyTried}/{proxy_to_try}")
+                        proxy_list.remove(proxy) # remove bad proxy for next job
+                if not job.IsCompleted:
+                    print(f"Upload failed for job {job}. Will retry.")
+                    job_attempts[job] += 1
+
+        # Optional: avoid hammering in a tight loop
+        time.sleep(2)

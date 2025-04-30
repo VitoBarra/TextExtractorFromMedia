@@ -101,3 +101,5 @@ def fetch_proxy_swiftshadow():
             print("can't find proxy")
             return []
         return [{"ip":proxy.ip,"port":proxy.port}]
+
+
