@@ -7,7 +7,6 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 
-
 def test_proxy(ip, port, test_url="https://httpbin.org/ip", use_https=False):
     proxy = f"{ip}:{port}"
     if use_https:
@@ -36,7 +35,6 @@ def is_valid_ip(ip):
         return True
     except ValueError:
         return False
-
 
 
 def fetch_proxies():
@@ -76,7 +74,6 @@ def fetchHTTPS_proxies():
     options.add_argument('--no-sandbox')
 
     print("Fetching HTTPS proxies")
-    driver = webdriver.Chrome(options=options)
     # Inizializzo il driver
     driver = webdriver.Chrome(options=options)
     driver.get('https://www.sslproxies.org/')
@@ -94,7 +91,8 @@ def fetchHTTPS_proxies():
             })
 
     driver.quit()
-    return proxies
+    filtered_proxies = [proxy for proxy in proxies if is_valid_ip(proxy["ip"])]
+    return filtered_proxies
 
 
 
@@ -105,11 +103,12 @@ def fetch_proxy_swiftshadow():
         autoRotate=True,
     )
 
-    while True:
+    proxy_list = []
+    for i in range(100):
         proxy = proxy_manager.get()
         if proxy is None:
             print("can't find proxy")
-            return []
-        return [{"ip":proxy.ip,"port":proxy.port}]
-
+            continue
+        proxy_list.append({"ip":proxy.ip,"port":proxy.port})
+    return proxy_list
 

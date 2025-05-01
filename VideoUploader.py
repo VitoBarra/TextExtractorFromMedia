@@ -16,16 +16,13 @@ class JobStatus(Enum):
     ProxyError = 1
     Error = 2
 
-
+class PageUnreachable(BaseException):
+    pass
 
 
 # --- Settings ---
 UPLOAD_URL = "https://vizard.ai/upload?from=video-to-text&tool-page=%2Fen%2Ftools%2Fvideo-to-text"
 WAIT_TIME_AFTER_UPLOAD = 60 * 10
-
-
-class PageUnreachable(BaseException):
-    pass
 
 
 def upload_video(job:VideoTranscriptJobDescriptor, proxy:object = None):
@@ -111,8 +108,9 @@ def upload_video(job:VideoTranscriptJobDescriptor, proxy:object = None):
         # Save the HTML output
         # At this point, all paragraphs should be loaded
         text_area_HTML = text_area.get_attribute("innerHTML")
-
         html_filename = os.path.join(OUTPUT_FOLDER,job.VideoProjectFolder, f"{os.path.splitext(os.path.basename(job.VideoName))[0]}.html")
+        # Ensure the directory exists
+        os.makedirs(os.path.dirname(html_filename), exist_ok=True)
         with open(html_filename, "w", encoding="utf-8") as f:
             f.write(text_area_HTML)
 
@@ -152,59 +150,63 @@ def is_file_recent(file_path, max_age_seconds):
 
 
 
-def load_proxies_from_file(file_path):
+def LoadJson(file_path):
     with open(file_path, "r") as f:
         return  json.load(f)
 
-PROXY_FILE =  'proxy_list.json'
-MAX_AGE_SECONDS = 3600
 
 if __name__ == "__main__":
-    # --- Create output folder if it doesn't exist ---
-    os.makedirs(OUTPUT_FOLDER, exist_ok=True)
-    video_jobs = GenerateJobsFromVideo()
+    MAX_AGE_SECONDS = 3600
+    BYPASS_PROXY = False
+    PROXY_FILE =  'proxy_list.json'
 
 
-
-    # Controllo se il file è recente e lo uso, altrimenti chiamo la funzione
-    if is_file_recent(PROXY_FILE, MAX_AGE_SECONDS):
-        proxy_list = load_proxies_from_file(PROXY_FILE)
+    if BYPASS_PROXY:
+        proxy_list = [None]
+        # Controllo se il file è recente e lo uso, altrimenti chiamo la funzione
+    elif is_file_recent(PROXY_FILE, MAX_AGE_SECONDS):
+        proxy_list = LoadJson(PROXY_FILE)
         print(f"loaded {len(proxy_list)} proxy from file {PROXY_FILE}")
     else:
-        proxy_list = fetchHTTPS_proxies()
+        # proxy_list = fetchHTTPS_proxies()
         # proxy_list = fetch_proxies()
-        # proxy_list = fetch_proxy_swiftshadow()
+        proxy_list = fetch_proxy_swiftshadow()
         with open(PROXY_FILE, "w") as f:
             json.dump( proxy_list, f)
         print(f"downloaded {len(proxy_list)} saved in file {PROXY_FILE}")
 
 
-    MAX_ATTEMPTS = 1
 
-    # Track how many times each job was attempted
-    job_attempts = {job: 0 for job in video_jobs}
+    video_jobs = GenerateJobsFromVideo()
+    for video_job in video_jobs:
+        html_filename = os.path.join(OUTPUT_FOLDER, video_job.VideoProjectFolder, f"{os.path.splitext(os.path.basename(video_job.VideoName))[0]}.html")
+        if os.path.isfile(html_filename):
+            video_job.IsCompleted = True
+
+
     while True:
-        incomplete_jobs = [job for job in video_jobs if not job.IsCompleted and job_attempts[job] < MAX_ATTEMPTS]
+        incomplete_jobs = [job for job in video_jobs if not job.IsCompleted]
 
         if not incomplete_jobs:
             print("All jobs completed (or reached max attempts).")
             break
 
-        for job in incomplete_jobs:
-            if job.Lock.locked():
-                continue
-            print(f"Trying job: {job}")
 
-            with ThreadPoolExecutor(max_workers=10) as executor:
-                proxyTried =0
-                futures = {executor.submit(try_upload, job, proxy): proxy for proxy in proxy_list}
+        for video_job in incomplete_jobs:
+            if video_job.Lock.locked():
+                continue
+            print(f"Trying job: {video_job}")
+
+            with ThreadPoolExecutor(max_workers=3) as executor:
+                proxyTried = 0
+                futures = {executor.submit(try_upload, video_job, proxy): proxy for proxy in proxy_list}
                 proxy_to_try = len(proxy_list)
                 for future in as_completed(futures):
                     proxyTried= proxyTried + 1
                     proxy , status = future.result()
                     if status == JobStatus.Succeeded:
-                        print(f"job {job} succeeded with proxy {proxy['ip']}:{proxy['port']}")
-                        job.IsCompleted = True
+                        print(f"job {video_job} succeeded with proxy {proxy['ip']}:{proxy['port']}")
+                        video_job.IsCompleted = True
                         break
                     else:
                         print(f"job progress, proxy tried:  {proxyTried}/{proxy_to_try}")
@@ -214,9 +216,7 @@ if __name__ == "__main__":
                             with open(PROXY_FILE, 'w') as f:
                                 json.dump(proxy_list, f, indent=2)
 
-                if not job.IsCompleted:
-                    print(f"Upload failed for job {job}. Will retry.")
-                    job_attempts[job] += 1
+                if not video_job.IsCompleted:
+                    print(f"Upload failed for job {video_job}. Will retry.")
 
-        # Optional: avoid hammering in a tight loop
         time.sleep(2)
