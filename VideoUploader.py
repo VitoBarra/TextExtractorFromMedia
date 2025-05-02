@@ -2,6 +2,7 @@
 import time
 from enum import Enum
 
+from selenium.common import TimeoutException
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 from seleniumbase import Driver
@@ -73,32 +74,59 @@ def upload_video(job:VideoTranscriptJobDescriptor, proxy:object = None):
         upload_button.click()
         driver.uc_gui_click_captcha()
         print (f"{threadName}: waiting for transcript button")
-        # Wait for the URL to change
-        transcript_div = WebDriverWait(driver, WAIT_TIME_AFTER_UPLOAD).until(EC.element_to_be_clickable((By.ID, "transcript_button")))
 
-        # Click the div
-        transcript_div.click()
+
+
+
+        max_retries = 3
+        retry_count = 0
+
+        while retry_count < max_retries:
+            # Check if transcript_button is present and clickable — if yes, proceed
+            try:
+                transcript_div = WebDriverWait(driver, 60*5).until(
+                    EC.element_to_be_clickable((By.ID, "transcript_button")))
+                # Click the div
+                transcript_div.click()
+                print(f"{threadName}: transcript button is ready, skipping retries")
+                break
+            except TimeoutException:
+                # Try clicking the retry button
+                try:
+                    retry_button = WebDriverWait(driver, 60).until(
+                        EC.element_to_be_clickable((By.XPATH, "//div[contains(text(), 'retry')]"))
+                    )
+                    retry_button.click()
+                    retry_count += 1
+                    print(f"{threadName}: clicked retry button ({retry_count})")
+                except TimeoutException:
+                    print(f"{threadName}: retry button not found this round")
+                    retry_count += 1  # still count it as an attempt
+
+
         # Get the scrollable container
         text_area = driver.find_element(By.ID, "textArea")
 
-        i = 0
 
+
+
+        paragraph_count = 0
         while True:
             try:
                 # Try to find paragraph by its ID
-                paragraph = text_area.find_element(By.ID, f"paragraph_{i}")
+                paragraph = text_area.find_element(By.ID, f"paragraph_{paragraph_count}")
 
                 # Scroll this paragraph into view
                 driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", paragraph)
                 time.sleep(0.5)  # Small pause to allow loading
 
-                print(f"{threadName}: Scrolled to paragraph_{i}")
+                print(f"{threadName}: Scrolled to paragraph_{paragraph_count}")
 
-                i += 1  # Go to the next paragraph
+                paragraph_count += 1  # Go to the next paragraph
 
             except Exception:
                 # If no paragraph with the next ID is found, we assume we finished
-                print(f"{threadName}: No more paragraphs found after paragraph_{i-1}. Finished scrolling.")
+                print(f"{threadName}: No more paragraphs found after paragraph_{paragraph_count-1}. Finished scrolling.")
                 break
 
         print(f"{threadName}: Scrolling complete.")
@@ -170,7 +198,11 @@ if __name__ == "__main__":
     else:
         # proxy_list = fetchHTTPS_proxies()
         # proxy_list = fetch_proxies()
-        proxy_list = fetch_proxy_swiftshadow()
+        try :
+            proxy_list = fetch_proxy_swiftshadow(True)
+        except Exception as e :
+            proxy_list = fetch_proxy_swiftshadow(False)
+
         with open(PROXY_FILE, "w") as f:
             json.dump( proxy_list, f)
         print(f"downloaded {len(proxy_list)} saved in file {PROXY_FILE}")

@@ -96,10 +96,10 @@ def fetchHTTPS_proxies():
 
 
 
-def fetch_proxy_swiftshadow():
+def fetch_proxy_swiftshadow(find_https = True):
     proxy_manager = ProxyInterface(
         countries=[],
-        protocol="https",
+        protocol= "https" if find_https else "http",
         autoRotate=True,
     )
 
