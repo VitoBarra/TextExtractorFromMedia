@@ -1,4 +1,5 @@
-﻿import os
+﻿import glob
+import os
 import shutil
 from moviepy import VideoFileClip
 
@@ -52,5 +53,28 @@ def split_video_file(input_path: str, interval_minutes: int = 55):
 
 
 
-if __name__ == '__main__':
-    split_video_file(os.path.join("data","13-neural Volume.mp4"), 30)
+def SplitVideoInFolder(data_directory="data", interval_minutes=55):
+
+    mp4_files = glob.glob(os.path.join(data_directory, '*.mp4'))
+
+    if not mp4_files:
+        print(f"No .mp4 files found in directory: '{data_directory}'")
+    else:
+        print(f"Found {len(mp4_files)} .mp4 files to process.")
+        for file_path in mp4_files:
+            basename, _ = os.path.splitext(os.path.basename(file_path))
+            expected_output_dir = os.path.join(data_directory, basename)
+
+            print(f"\n--- Checking file: {os.path.basename(file_path)} ---")
+
+            if os.path.isdir(expected_output_dir):
+                print(f"Output directory '{expected_output_dir}' already exists. Skipping processing.")
+                continue # Skip to the next file in the loop
+
+            print(f"Starting processing for: {os.path.basename(file_path)}")
+            try:
+                split_video_file(file_path, interval_minutes)
+            except Exception as e:
+                print(f"Error while splitting {os.path.basename(file_path)}: {e}")
+
+        print("\n--- Processing complete ---")

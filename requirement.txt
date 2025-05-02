@@ -4,3 +4,4 @@ seleniumbase
 swiftshadow>2.0
 chardet
 beautifulsoup4
+moviepy

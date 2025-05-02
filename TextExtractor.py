@@ -67,5 +67,16 @@ def TextExtractor(input_path, output_file):
 
     print(f"Text extracted in: {output_file}")
 
-if __name__ == '__main__':
-    TextExtractor(os.path.join("transcript","11-Ramsac"), "output.txt")
+def ExtractTextFromFolder(transcript_dir ="transcript"):
+
+    # Ottiene tutte le sottocartelle nella directory transcript
+    subdirectories = [d for d in os.listdir(transcript_dir)
+                      if os.path.isdir(os.path.join(transcript_dir, d))]
+
+    # Processa ogni sottocartella
+    for subdir in subdirectories:
+        input_path = os.path.join(transcript_dir, subdir)
+        output_file = f"{subdir}.md"
+        print(f"\nworking on folder: {subdir}")
+        TextExtractor(input_path, os.path.join(transcript_dir,output_file))
+

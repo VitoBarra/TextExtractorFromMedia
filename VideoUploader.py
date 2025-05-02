@@ -84,6 +84,7 @@ def upload_video(job:VideoTranscriptJobDescriptor, proxy:object = None):
         while retry_count < max_retries:
             # Check if transcript_button is present and clickable — if yes, proceed
             try:
+                print("Waiting for transcript button...")
                 transcript_div = WebDriverWait(driver, 60*5).until(
                     EC.element_to_be_clickable((By.ID, "transcript_button")))
                 # Click the div
@@ -94,14 +95,16 @@ def upload_video(job:VideoTranscriptJobDescriptor, proxy:object = None):
                 # Try clicking the retry button
                 try:
                     retry_button = WebDriverWait(driver, 60).until(
-                        EC.element_to_be_clickable((By.XPATH, "//div[contains(text(), 'retry')]"))
+                        EC.element_to_be_clickable(
+                            (By.XPATH, "//*[translate(normalize-space(text()), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') = 'retry']")
+                        )
                     )
                     retry_button.click()
                     retry_count += 1
                     print(f"{threadName}: clicked retry button ({retry_count})")
-                except TimeoutException:
-                    print(f"{threadName}: retry button not found this round")
+                except Exception:
                     retry_count += 1  # still count it as an attempt
+                    print(f"{threadName}: retry button not found in round {retry_count} ")
 
 
         # Get the scrollable container
@@ -136,7 +139,7 @@ def upload_video(job:VideoTranscriptJobDescriptor, proxy:object = None):
         # Save the HTML output
         # At this point, all paragraphs should be loaded
         text_area_HTML = text_area.get_attribute("innerHTML")
-        html_filename = os.path.join(OUTPUT_FOLDER,job.VideoProjectFolder, f"{os.path.splitext(os.path.basename(job.VideoName))[0]}.html")
+        html_filename = job.GetOutputFilePath()
         # Ensure the directory exists
         os.makedirs(os.path.dirname(html_filename), exist_ok=True)
         with open(html_filename, "w", encoding="utf-8") as f:
@@ -159,15 +162,15 @@ def upload_video(job:VideoTranscriptJobDescriptor, proxy:object = None):
 
 
 
-def try_upload(jobDesc:VideoTranscriptJobDescriptor, proxy:str) ->(str,JobStatus):
+def try_upload(jobDesc:VideoTranscriptJobDescriptor, proxy:str) ->JobStatus:
     try:
         upload_video(jobDesc, proxy)
-        return proxy,JobStatus.Succeeded  # Success
+        return JobStatus.Succeeded  # Success
     except PageUnreachable:
-        return proxy,JobStatus.ProxyError
+        return JobStatus.ProxyError
     except Exception as e :
         print(f"Exception : {e}")
-        return proxy,JobStatus.Error
+        return JobStatus.Error
 
 
 def is_file_recent(file_path, max_age_seconds):
@@ -183,11 +186,9 @@ def LoadJson(file_path):
         return  json.load(f)
 
 
-if __name__ == "__main__":
+def UploadVideos(BYPASS_PROXY =False, Input_folder="data", output_folder ="transcript"):
     MAX_AGE_SECONDS = 3600
-    BYPASS_PROXY = False
     PROXY_FILE =  'proxy_list.json'
-
 
     if BYPASS_PROXY:
         proxy_list = [None]
@@ -209,18 +210,21 @@ if __name__ == "__main__":
 
 
 
-    video_jobs = GenerateJobsFromVideo()
+    video_jobs = GenerateJobsFromVideo(Input_folder)
     for video_job in video_jobs:
-        html_filename = os.path.join(OUTPUT_FOLDER, video_job.VideoProjectFolder, f"{os.path.splitext(os.path.basename(video_job.VideoName))[0]}.html")
+        video_job.SetOutputFolder(output_folder)
+        html_filename =video_job.GetOutputFilePath()
+
         if os.path.isfile(html_filename):
             video_job.IsCompleted = True
 
 
-    while True:
+
+    while len(proxy_list)>0:
         incomplete_jobs = [job for job in video_jobs if not job.IsCompleted]
 
         if not incomplete_jobs:
-            print("All jobs completed (or reached max attempts).")
+            print("All jobs completed")
             break
 
 
@@ -229,13 +233,16 @@ if __name__ == "__main__":
                 continue
             print(f"Trying job: {video_job}")
 
-            with ThreadPoolExecutor(max_workers=3) as executor:
+            with ThreadPoolExecutor(max_workers=8) as executor:
                 proxyTried = 0
                 futures = {executor.submit(try_upload, video_job, proxy): proxy for proxy in proxy_list}
                 proxy_to_try = len(proxy_list)
                 for future in as_completed(futures):
                     proxyTried= proxyTried + 1
-                    proxy , status = future.result()
+
+                    proxy = futures[future]
+                    status = future.result()
+
                     if status == JobStatus.Succeeded:
                         print(f"job {video_job} succeeded with proxy {proxy['ip']}:{proxy['port']}")
                         video_job.IsCompleted = True
@@ -249,6 +256,6 @@ if __name__ == "__main__":
                                 json.dump(proxy_list, f, indent=2)
 
                 if not video_job.IsCompleted:
-                    print(f"Upload failed for job {video_job}. Will retry.")
+                    print(f"Upload failed for job {video_job}")
 
         time.sleep(2)
