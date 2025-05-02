@@ -2,3 +2,5 @@
 undetected-chromedriver
 seleniumbase
 swiftshadow>2.0
+chardet
+beautifulsoup4
