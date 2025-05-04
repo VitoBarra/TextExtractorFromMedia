@@ -3,6 +3,11 @@ import os
 import shutil
 from moviepy import VideoFileClip
 
+
+
+# Allowed video/audio extensions
+ALLOWED_EXTENSIONS = (".mp4", ".mov", ".3gp", ".avi", ".mp3", ".wav", ".m4a", ".mkv")
+
 def split_video_file(input_path: str, interval_minutes: int = 55):
     """
     Splits the input video into chunks of interval_minutes duration using moviepy.
@@ -55,13 +60,17 @@ def split_video_file(input_path: str, interval_minutes: int = 55):
 
 def SplitVideoInFolder(data_directory="data", interval_minutes=55):
 
-    mp4_files = glob.glob(os.path.join(data_directory, '*.mp4'))
 
-    if not mp4_files:
-        print(f"No .mp4 files found in directory: '{data_directory}'")
+    # Gather all files in the directory that match the allowed extensions
+    files_to_process = []
+    for ext in ALLOWED_EXTENSIONS:
+        files_to_process.extend(glob.glob(os.path.join(data_directory, f'*{ext}')))
+
+    if not files_to_process:
+        print(f"No allowed media files found in directory: '{data_directory}'")
     else:
-        print(f"Found {len(mp4_files)} .mp4 files to process.")
-        for file_path in mp4_files:
+        print(f"Found {len(files_to_process)} media files to process.")
+        for file_path in files_to_process:
             basename, _ = os.path.splitext(os.path.basename(file_path))
             expected_output_dir = os.path.join(data_directory, basename)
 
@@ -69,7 +78,7 @@ def SplitVideoInFolder(data_directory="data", interval_minutes=55):
 
             if os.path.isdir(expected_output_dir):
                 print(f"Output directory '{expected_output_dir}' already exists. Skipping processing.")
-                continue # Skip to the next file in the loop
+                continue  # Skip to the next file in the loop
 
             print(f"Starting processing for: {os.path.basename(file_path)}")
             try:
