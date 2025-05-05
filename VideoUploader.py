@@ -85,26 +85,58 @@ def upload_video(job:VideoTranscriptJobDescriptor, proxy:object = None):
             # Check if transcript_button is present and clickable — if yes, proceed
             try:
                 print("Waiting for transcript button...")
-                transcript_div = WebDriverWait(driver, 60*5).until(
+                transcript_div = WebDriverWait(driver, 60*3).until(
                     EC.element_to_be_clickable((By.ID, "transcript_button")))
                 # Click the div
                 transcript_div.click()
                 print(f"{threadName}: transcript button is ready, skipping retries")
                 break
             except TimeoutException:
-                # Try clicking the retry button
-                try:
-                    retry_button = WebDriverWait(driver, 60).until(
+                #Language not found
+                try: #TODO: metadata system to get language
+                    language = "english"
+                    print(f"{threadName}: waiting for language button...")
+                    language_button = WebDriverWait(driver, 15).until(
                         EC.element_to_be_clickable(
-                            (By.XPATH, "//*[translate(normalize-space(text()), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') = 'retry']")
+                            (By.XPATH, f"//*[translate(normalize-space(text()), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') = '{language}']")
                         )
                     )
-                    retry_button.click()
-                    retry_count += 1
-                    print(f"{threadName}: clicked retry button ({retry_count})")
-                except Exception:
-                    retry_count += 1  # still count it as an attempt
-                    print(f"{threadName}: retry button not found in round {retry_count} ")
+                    language_button.click()
+                    continue_button = WebDriverWait(driver, 3).until(
+                        EC.element_to_be_clickable(
+                            (By.XPATH, "//*[translate(normalize-space(text()), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') = 'continue']")
+                        )
+                    )
+                    continue_button.click()
+                    print(f"{threadName}: language button founded...language selected {language}")
+                except TimeoutException: #TODO: this dont seams to work
+                    try:
+                        print ( f"{threadName}: language button NOT founded...")
+                        print ( f"{threadName}: checking if the bot has been detected")
+                        # close the browser if the bot is detected
+                        cloud_flare = WebDriverWait(driver, 20).until(
+                            EC.element_to_be_clickable(
+                                (By.XPATH, "//*[translate(normalize-space(text()), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') = 'Checking if the site connection is secure']")
+                            )
+                        )
+                        print ( f"{threadName}: bot detected closing...")
+                        return
+                    except TimeoutException:
+                        try:
+                            print ( f"{threadName}: bot NOT detected...(NOT WORKING)")
+                            print ( f"{threadName}: checking for retry button")
+                            # Try clicking the retry button
+                            retry_button = WebDriverWait(driver, 60).until(
+                                EC.element_to_be_clickable(
+                                    (By.XPATH, "//*[translate(normalize-space(text()), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') = 'retry']")
+                                )
+                            )
+                            retry_button.click()
+                            retry_count += 1
+                            print(f"{threadName}: clicked retry button ({retry_count})")
+                        except TimeoutException:
+                            retry_count += 1  # still count it as an attempt
+                            print(f"{threadName}: retry button not found in round {retry_count} ")
 
 
         # Get the scrollable container
@@ -187,7 +219,7 @@ def LoadJson(file_path):
 
 
 def UploadVideos(BYPASS_PROXY =False, Input_folder="data", output_folder ="transcript"):
-    MAX_AGE_SECONDS = 3600
+    MAX_AGE_SECONDS = 1800
     PROXY_FILE =  'proxy_list.json'
 
     if BYPASS_PROXY:
@@ -211,12 +243,12 @@ def UploadVideos(BYPASS_PROXY =False, Input_folder="data", output_folder ="trans
 
 
     video_jobs = GenerateJobsFromVideo(Input_folder)
-    for video_job in video_jobs:
-        video_job.SetOutputFolder(output_folder)
-        html_filename =video_job.GetOutputFilePath()
+    for job in video_jobs:
+        job.SetOutputFolder(output_folder)
+        html_filename =job.GetOutputFilePath()
 
         if os.path.isfile(html_filename):
-            video_job.IsCompleted = True
+            job.IsCompleted = True
 
 
 
@@ -228,14 +260,14 @@ def UploadVideos(BYPASS_PROXY =False, Input_folder="data", output_folder ="trans
             break
 
 
-        for video_job in incomplete_jobs:
-            if video_job.Lock.locked():
+        for job in incomplete_jobs:
+            if job.Lock.locked():
                 continue
-            print(f"Trying job: {video_job}")
+            print(f"Trying job: {job}")
 
             with ThreadPoolExecutor(max_workers=8) as executor:
                 proxyTried = 0
-                futures = {executor.submit(try_upload, video_job, proxy): proxy for proxy in proxy_list}
+                futures = {executor.submit(try_upload, job, proxy): proxy for proxy in proxy_list}
                 proxy_to_try = len(proxy_list)
                 for future in as_completed(futures):
                     proxyTried= proxyTried + 1
@@ -244,8 +276,8 @@ def UploadVideos(BYPASS_PROXY =False, Input_folder="data", output_folder ="trans
                     status = future.result()
 
                     if status == JobStatus.Succeeded:
-                        print(f"job {video_job} succeeded with proxy {proxy['ip']}:{proxy['port']}")
-                        video_job.IsCompleted = True
+                        print(f"job {job} succeeded with proxy {proxy['ip']}:{proxy['port']}")
+                        job.IsCompleted = True
                         break
                     else:
                         print(f"job progress, proxy tried:  {proxyTried}/{proxy_to_try}")
@@ -255,7 +287,9 @@ def UploadVideos(BYPASS_PROXY =False, Input_folder="data", output_folder ="trans
                             with open(PROXY_FILE, 'w') as f:
                                 json.dump(proxy_list, f, indent=2)
 
-                if not video_job.IsCompleted:
-                    print(f"Upload failed for job {video_job}")
+                if not job.IsCompleted:
+                    print(f"Upload failed for job {job}")
 
         time.sleep(2)
+    return all(job.IsCompleted for job in video_jobs)
+
