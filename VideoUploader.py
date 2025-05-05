@@ -25,6 +25,125 @@ class PageUnreachable(BaseException):
 UPLOAD_URL = "https://vizard.ai/upload?from=video-to-text&tool-page=%2Fen%2Ftools%2Fvideo-to-text"
 WAIT_TIME_AFTER_UPLOAD = 60 * 10
 
+# Helper functions for better readability
+def find_element_if_present(driver, by, value, timeout=1):
+    """ Finds an element, returns the element if found within the timeout, otherwise None. """
+    try:
+        return WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((by, value))
+        )
+    except TimeoutException:
+        return None
+
+
+def click_element_if_clickable(driver, element, timeout=5, threadName = "noname"):
+    """ Clicks an element if it becomes clickable within the timeout. Returns True if clicked, False otherwise. """
+    if not element:
+        return False
+    try:
+        # Pass the element itself, not the locator tuple
+        clickable_element = WebDriverWait(driver, timeout).until(
+            EC.element_to_be_clickable(element)
+        )
+        clickable_element.click()
+        return True
+    except TimeoutException:
+        print(f"{threadName}: Element found but not clickable within {timeout}s.")
+        return False
+    except Exception as e:
+        print(f"{threadName}: Error during click: {e}")
+        return False
+
+
+def MainUploadLoop (driver,language='english',max_retries=3,threadName="Noname"):
+    retry_count=0
+    while retry_count < max_retries:
+        print(f"{threadName}: Checking page state (Attempt {retry_count + 1}/{max_retries})...")
+
+        # Use short timeouts to check for the presence of key elements
+        transcript_button = find_element_if_present(driver, By.ID, "transcript_button" , 60*3)
+        # Ensure language is lowercase for case-insensitive XPath comparison
+        language_xpath = f"//*[translate(normalize-space(text()), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') = '{language.lower()}']"
+        language_button = find_element_if_present(driver, By.XPATH, language_xpath , timeout=5)
+
+        cloudflare_xpath = "//*[contains(translate(normalize-space(text()), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'checking if the site connection is secure')]"
+        cloudflare_banner = find_element_if_present(driver, By.XPATH, cloudflare_xpath, timeout=5)
+
+        retry_xpath = "//*[translate(normalize-space(text()), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') = 'retry']"
+        retry_button = find_element_if_present(driver, By.XPATH, retry_xpath, timeout=5)
+
+        # Logic based on found elements
+        if transcript_button:
+            print(f"{threadName}: Found transcript button.")
+            # Give it time to become clickable
+            if click_element_if_clickable(driver, transcript_button, timeout=30):
+                print(f"{threadName}: Transcript button clicked successfully.")
+                break # Success, exit the loop
+            else:
+                print(f"{threadName}: Transcript button found but could not be clicked.")
+                # You might want to increment retry_count or handle the error differently
+                retry_count += 1
+                time.sleep(5) # Pause before retrying
+                continue
+
+        elif language_button:
+            print(f"{threadName}: Found language button '{language}'.")
+            if click_element_if_clickable(driver, language_button, timeout=15):
+                print(f"{threadName}: Language button clicked.")
+                # Find and click the "Continue" button
+                continue_xpath = "//*[translate(normalize-space(text()), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') = 'continue']"
+                continue_button = find_element_if_present(driver, By.XPATH, continue_xpath, timeout=5)
+                if click_element_if_clickable(driver, continue_button, timeout=5):
+                    print(f"{threadName}: 'Continue' button clicked.")
+                    # Don't increment retry_count, the process is progressing
+                    time.sleep(2) # Short pause for page load
+                    # Go back to the start of the loop to look for the transcript button
+                    continue
+                else:
+                    print(f"{threadName}: 'Continue' button not found or not clickable after selecting language.")
+                    retry_count += 1
+                    time.sleep(5)
+                    continue
+            else:
+                print(f"{threadName}: Could not click the language button.")
+                retry_count += 1
+                time.sleep(5)
+                continue
+
+        elif cloudflare_banner:
+            print(f"{threadName}: Cloudflare/Bot detection banner detected. Aborting.")
+            # Here you might want to close the driver or handle it differently
+            # return # Exits the containing function/method
+            return
+
+        elif retry_button:
+            print(f"{threadName}: Found 'retry' button.")
+            if click_element_if_clickable(driver, retry_button, timeout=10):
+                retry_count += 1
+                print(f"{threadName}: Clicked 'retry' button ({retry_count}/{max_retries}).")
+                time.sleep(10) # Wait a bit after retry
+                continue
+            else:
+                print(f"{threadName}: Could not click the 'retry' button.")
+                # Still count it as an attempt
+                retry_count += 1
+                time.sleep(5)
+                continue
+
+        else:
+            # None of the expected elements were found within the short timeouts
+            print(f"{threadName}: No known state element found. Waiting and retrying...")
+            retry_count += 1
+            # Wait a bit before the next general attempt
+            time.sleep(15)
+
+        # After the loop
+    if retry_count >= max_retries:
+        print(f"{threadName}: Maximum number of retries ({max_retries}) reached. Could not proceed.")
+
+
+
+
 
 def upload_video(job:VideoTranscriptJobDescriptor, proxy:object = None):
     job.Lock.acquire()
@@ -73,76 +192,10 @@ def upload_video(job:VideoTranscriptJobDescriptor, proxy:object = None):
 
         upload_button.click()
         driver.uc_gui_click_captcha()
-        print (f"{threadName}: waiting for transcript button")
-
-
-
-
-        max_retries = 3
-        retry_count = 0
-
-        while retry_count < max_retries:
-            # Check if transcript_button is present and clickable — if yes, proceed
-            try:
-                print("Waiting for transcript button...")
-                transcript_div = WebDriverWait(driver, 60*3).until(
-                    EC.element_to_be_clickable((By.ID, "transcript_button")))
-                # Click the div
-                transcript_div.click()
-                print(f"{threadName}: transcript button is ready, skipping retries")
-                break
-            except TimeoutException:
-                #Language not found
-                try: #TODO: metadata system to get language
-                    language = "english"
-                    print(f"{threadName}: waiting for language button...")
-                    language_button = WebDriverWait(driver, 15).until(
-                        EC.element_to_be_clickable(
-                            (By.XPATH, f"//*[translate(normalize-space(text()), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') = '{language}']")
-                        )
-                    )
-                    language_button.click()
-                    continue_button = WebDriverWait(driver, 3).until(
-                        EC.element_to_be_clickable(
-                            (By.XPATH, "//*[translate(normalize-space(text()), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') = 'continue']")
-                        )
-                    )
-                    continue_button.click()
-                    print(f"{threadName}: language button founded...language selected {language}")
-                except TimeoutException: #TODO: this dont seams to work
-                    try:
-                        print ( f"{threadName}: language button NOT founded...")
-                        print ( f"{threadName}: checking if the bot has been detected")
-                        # close the browser if the bot is detected
-                        cloud_flare = WebDriverWait(driver, 20).until(
-                            EC.element_to_be_clickable(
-                                (By.XPATH, "//*[translate(normalize-space(text()), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') = 'Checking if the site connection is secure']")
-                            )
-                        )
-                        print ( f"{threadName}: bot detected closing...")
-                        return
-                    except TimeoutException:
-                        try:
-                            print ( f"{threadName}: bot NOT detected...(NOT WORKING)")
-                            print ( f"{threadName}: checking for retry button")
-                            # Try clicking the retry button
-                            retry_button = WebDriverWait(driver, 60).until(
-                                EC.element_to_be_clickable(
-                                    (By.XPATH, "//*[translate(normalize-space(text()), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') = 'retry']")
-                                )
-                            )
-                            retry_button.click()
-                            retry_count += 1
-                            print(f"{threadName}: clicked retry button ({retry_count})")
-                        except TimeoutException:
-                            retry_count += 1  # still count it as an attempt
-                            print(f"{threadName}: retry button not found in round {retry_count} ")
-
+        MainUploadLoop(driver, threadName=str(threadName))
 
         # Get the scrollable container
         text_area = driver.find_element(By.ID, "textArea")
-
-
 
 
         paragraph_count = 0
