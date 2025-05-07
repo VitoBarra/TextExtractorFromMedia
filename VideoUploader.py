@@ -192,7 +192,8 @@ def upload_video(job:VideoTranscriptJobDescriptor, proxy:object = None):
 
         upload_button.click()
         driver.uc_gui_click_captcha()
-        MainUploadLoop(driver, threadName=str(threadName))
+
+        MainUploadLoop(driver,job.Language,3, threadName=str(threadName))
 
         # Get the scrollable container
         text_area = driver.find_element(By.ID, "textArea")
@@ -266,11 +267,6 @@ def is_file_recent(file_path, max_age_seconds):
 
 
 
-def LoadJson(file_path):
-    with open(file_path, "r") as f:
-        return  json.load(f)
-
-
 def UploadVideos(BYPASS_PROXY =False, Input_folder="data", output_folder ="transcript"):
     MAX_AGE_SECONDS = 1800
     PROXY_FILE =  'proxy_list.json'
@@ -279,7 +275,7 @@ def UploadVideos(BYPASS_PROXY =False, Input_folder="data", output_folder ="trans
         proxy_list = [None]
         # Controllo se il file è recente e lo uso, altrimenti chiamo la funzione
     elif is_file_recent(PROXY_FILE, MAX_AGE_SECONDS):
-        proxy_list = LoadJson(PROXY_FILE)
+        proxy_list = ReadJson(PROXY_FILE)
         print(f"loaded {len(proxy_list)} proxy from file {PROXY_FILE}")
     else:
         # proxy_list = fetchHTTPS_proxies()
