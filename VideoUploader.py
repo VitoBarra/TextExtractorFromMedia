@@ -13,9 +13,9 @@ from VideoTranscriptJobDescriptor import *
 
 
 class JobStatus(Enum):
-    Succeeded = 0
-    ProxyError = 1
-    Error = 2
+    Success = 0
+    PageConnectionError = 1
+    GenericError = 2
 
 class PageUnreachable(BaseException):
     pass
@@ -52,7 +52,10 @@ def click_element_if_clickable(driver, element, timeout=5, threadName = "noname"
         return False
     except Exception as e:
         print(f"{threadName}: Error during click: {e}")
-        return False
+        return
+
+
+
 
 
 def MainUploadLoop (driver,language='english',max_retries=3,threadName="Noname"):
@@ -251,44 +254,60 @@ def upload_video(job:VideoTranscriptJobDescriptor, proxy:object = None):
 def try_upload(jobDesc:VideoTranscriptJobDescriptor, proxy:str) ->JobStatus:
     try:
         upload_video(jobDesc, proxy)
-        return JobStatus.Succeeded  # Success
+        return JobStatus.Success  # Success
     except PageUnreachable:
-        return JobStatus.ProxyError
+        return JobStatus.PageConnectionError
     except Exception as e :
         print(f"Exception : {e}")
-        return JobStatus.Error
+        return JobStatus.GenericError
 
 
-def is_file_recent(file_path, max_age_seconds):
+def has_fresh_content(file_path, max_age_seconds):
+    """
+    Check if a file exists and was modified within the specified time frame.
+    
+    Args:
+        file_path (str): Path to the file to check
+        max_age_seconds (int): Maximum age in seconds to consider the file as fresh
+        
+    Returns:
+        bool: True if file exists and was modified within max_age_seconds, False otherwise
+    """
     if not os.path.exists(file_path):
         return False
     file_mtime = os.path.getmtime(file_path)
     return (time.time() - file_mtime) < max_age_seconds
 
 
+def fetch_proxies():
+    """Fetches proxies, trying HTTPS first by default."""
+    try:
+        return fetch_proxy_swiftshadow(True)
+    except Exception:
+        return fetch_proxy_swiftshadow(False)
+
+
 
 def UploadVideos(BYPASS_PROXY =False, Input_folder="data", output_folder ="transcript"):
     MAX_AGE_SECONDS = 1800
     PROXY_FILE =  'proxy_list.json'
+    MAX_RETRIES = 3
+    proxy_failures = {}  # Track consecutive failures for each proxy
 
     if BYPASS_PROXY:
         proxy_list = [None]
-        # Controllo se il file è recente e lo uso, altrimenti chiamo la funzione
-    elif is_file_recent(PROXY_FILE, MAX_AGE_SECONDS):
+        # Check if file is recent and use it, otherwise call the function
+    elif has_fresh_content(PROXY_FILE, MAX_AGE_SECONDS):
         proxy_list = ReadJson(PROXY_FILE)
-        print(f"loaded {len(proxy_list)} proxy from file {PROXY_FILE}")
+        print(f"Loaded {len(proxy_list)} proxies from file {PROXY_FILE}")
+        if len(proxy_list) == 0:
+            print ("...finding new proxy")
+            proxy_list = fetch_proxies()
+            WriteJson(PROXY_FILE, proxy_list)
     else:
-        # proxy_list = fetchHTTPS_proxies()
-        # proxy_list = fetch_proxies()
-        try :
-            proxy_list = fetch_proxy_swiftshadow(True)
-        except Exception as e :
-            proxy_list = fetch_proxy_swiftshadow(False)
-
-        with open(PROXY_FILE, "w") as f:
-            json.dump( proxy_list, f)
-        print(f"downloaded {len(proxy_list)} saved in file {PROXY_FILE}")
-
+        proxy_list = fetch_proxies()
+        WriteJson(PROXY_FILE,proxy_list)
+        print(f"Downloaded {len(proxy_list)} proxies and saved to file {PROXY_FILE}")
 
 
     video_jobs = GenerateJobsFromVideo(Input_folder)
@@ -299,20 +318,19 @@ def UploadVideos(BYPASS_PROXY =False, Input_folder="data", output_folder ="trans
         if os.path.isfile(html_filename):
             job.IsCompleted = True
 
-
-
+    
+    
     while len(proxy_list)>0:
         incomplete_jobs = [job for job in video_jobs if not job.IsCompleted]
 
         if not incomplete_jobs:
-            print("All jobs completed")
+            print("All transcription jobs completed successfully")
             break
-
 
         for job in incomplete_jobs:
             if job.Lock.locked():
                 continue
-            print(f"Trying job: {job}")
+            print(f"Processing transcription job: {job}")
 
             with ThreadPoolExecutor(max_workers=8) as executor:
                 proxyTried = 0
@@ -323,18 +341,25 @@ def UploadVideos(BYPASS_PROXY =False, Input_folder="data", output_folder ="trans
 
                     proxy = futures[future]
                     status = future.result()
+                    proxy_str = f"{proxy['ip']}:{proxy['port']}"
 
-                    if status == JobStatus.Succeeded:
-                        print(f"job {job} succeeded with proxy {proxy['ip']}:{proxy['port']}")
+                    print(f"job progress, proxy tried:  {proxyTried}/{proxy_to_try}")
+                    if status == JobStatus.Success:
+                        print(f"Job {job} completed successfully with proxy {proxy_str}")
                         job.IsCompleted = True
                         break
-                    else:
-                        print(f"job progress, proxy tried:  {proxyTried}/{proxy_to_try}")
-                        if status == JobStatus.ProxyError:
-                            proxy_list.remove(proxy) # remove bad proxy for next job
-                            # Save tried proxies to file
-                            with open(PROXY_FILE, 'w') as f:
-                                json.dump(proxy_list, f, indent=2)
+                    elif status == JobStatus.PageConnectionError:
+                        proxy_list.remove(proxy)  # Remove non-working proxy for next job
+                        # Save working proxies to file
+                        WriteJson(PROXY_FILE, proxy_list)
+                    elif status == JobStatus.GenericError:
+                        proxy_failures[proxy_str] = proxy_failures.get(proxy_str, 0) + 1
+                        if proxy_failures[proxy_str] >= MAX_RETRIES:  # Remove proxy after maximum allowed failures
+                            proxy_list.remove(proxy)
+                            del proxy_failures[proxy_str]  # Clean up failure tracking
+                            # Save updated proxy list
+                            WriteJson(PROXY_FILE, proxy_list)
+                            print(f"Removed proxy {proxy} after {MAX_RETRIES} failures")
 
                 if not job.IsCompleted:
                     print(f"Upload failed for job {job}")
