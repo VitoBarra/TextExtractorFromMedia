@@ -39,7 +39,12 @@ def split_video_file(input_path: str, interval_minutes: int = 55):
     os.makedirs(output_dir, exist_ok=True)
 
     # Load video
-    clip = VideoFileClip(input_path)
+    try:
+        clip = VideoFileClip(input_path)
+    except Exception as e:
+        os.remove(output_dir)
+        raise e
+
     duration = clip.duration  # in seconds
     start = 0
     part = 1
