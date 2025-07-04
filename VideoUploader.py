@@ -148,7 +148,7 @@ def MainUploadLoop (driver,language='english',max_retries=3,threadName="Noname")
 
 
 
-def upload_video(job:VideoTranscriptJobDescriptor, proxy:object = None):
+def upload_video(job:VideoTranscriptJobDescriptor, proxy:object = None , headless_Mode = False):
     job.Lock.acquire()
     if job.IsCompleted:
         job.Lock.release()
@@ -165,10 +165,10 @@ def upload_video(job:VideoTranscriptJobDescriptor, proxy:object = None):
     try:
         if proxy is not None:
             proxy_string =f"{proxy['ip']}:{proxy['port']}"
-            driver = Driver(uc=True, headless=False, proxy=proxy_string )
+            driver = Driver(uc=True, headless=headless_Mode, proxy=proxy_string )
         else:
             # initialize the driver in GUI mode with UC enabled
-            driver = Driver(uc=True, headless=False)
+            driver = Driver(uc=True, headless=headless_Mode)
 
         # Refresh the page before each upload (optional, depends on the site)
         try:
@@ -251,9 +251,9 @@ def upload_video(job:VideoTranscriptJobDescriptor, proxy:object = None):
 
 
 
-def try_upload(jobDesc:VideoTranscriptJobDescriptor, proxy:str) ->JobStatus:
+def try_upload(jobDesc:VideoTranscriptJobDescriptor, proxy:str, headless_mode = False) ->JobStatus:
     try:
-        upload_video(jobDesc, proxy)
+        upload_video(jobDesc, proxy,headless_mode)
         return JobStatus.Success  # Success
     except PageUnreachable:
         return JobStatus.PageConnectionError
@@ -288,7 +288,7 @@ def fetch_proxies():
 
 
 
-def UploadVideos(BYPASS_PROXY =False, Input_folder="data", output_folder ="transcript"):
+def UploadVideos(BYPASS_PROXY =False, Input_folder="data", output_folder ="transcript" , headless_Mode = False):
     MAX_AGE_SECONDS = 1800
     PROXY_FILE =  'proxy_list.json'
     MAX_RETRIES = 3
@@ -334,7 +334,7 @@ def UploadVideos(BYPASS_PROXY =False, Input_folder="data", output_folder ="trans
 
             with ThreadPoolExecutor(max_workers=8) as executor:
                 proxyTried = 0
-                futures = {executor.submit(try_upload, job, proxy): proxy for proxy in proxy_list}
+                futures = {executor.submit(try_upload, job, proxy, headless_Mode): proxy for proxy in proxy_list}
                 proxy_to_try = len(proxy_list)
                 for future in as_completed(futures):
                     proxyTried= proxyTried + 1
