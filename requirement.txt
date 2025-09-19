@@ -1,7 +1,12 @@
 ﻿selenium
 undetected-chromedriver
 seleniumbase
-swiftshadow>2.0
+swiftshadow>=2.0,<2.2.0
 chardet
 beautifulsoup4
-moviepy
+moviepy==2.2.1
+soundfile
+scipy
+noisereduce
+numpy
+ffmpeg-python
