@@ -3,10 +3,8 @@ import os
 import shutil
 from moviepy import VideoFileClip
 
+from DataProcessing import VIDEO_EXTENSIONS, RAW_VIDEO_FOLDER
 
-
-# Allowed video/audio extensions
-ALLOWED_EXTENSIONS = (".mp4", ".mov", ".3gp", ".avi", ".mp3", ".wav", ".m4a", ".mkv")
 
 def split_video_file(input_path: str, interval_minutes: int = 55):
     """
@@ -63,12 +61,10 @@ def split_video_file(input_path: str, interval_minutes: int = 55):
 
 
 
-def SplitVideoInFolder(data_directory="data", interval_minutes=55):
-
-
+def SplitVideoInFolder(data_directory=RAW_VIDEO_FOLDER, interval_minutes=55):
     # Gather all files in the directory that match the allowed extensions
     files_to_process = []
-    for ext in ALLOWED_EXTENSIONS:
+    for ext in VIDEO_EXTENSIONS:
         files_to_process.extend(glob.glob(os.path.join(data_directory, f'*{ext}')))
 
     if not files_to_process:

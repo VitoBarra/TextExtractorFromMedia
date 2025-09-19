@@ -3,6 +3,8 @@ import sys
 from chardet.universaldetector import UniversalDetector
 from bs4 import BeautifulSoup
 
+from DataProcessing import OUTPUT_TRANSCRIPT, HTML_OUTPUT_FOLDER
+
 
 def detect_encoding(file_path):
     if not os.path.isfile(file_path):
@@ -67,16 +69,16 @@ def TextExtractor(input_path, output_file):
 
     print(f"Text extracted in: {output_file}")
 
-def ExtractTextFromFolder(transcript_dir ="transcript"):
+def ExtractTextFromFolder(input_HTML_dir = HTML_OUTPUT_FOLDER, transcript_dir = OUTPUT_TRANSCRIPT):
 
     # Ottiene tutte le sottocartelle nella directory transcript
-    subdirectories = [d for d in os.listdir(transcript_dir)
-                      if os.path.isdir(os.path.join(transcript_dir, d))]
+    subdirectories = [dir for dir in os.listdir(input_HTML_dir)
+                      if os.path.isdir(input_HTML_dir / dir)]
 
     # Processa ogni sottocartella
     for subdir in subdirectories:
-        input_path = os.path.join(transcript_dir, subdir)
+        input_path = input_HTML_dir / subdir
         output_file = f"{subdir}.md"
         print(f"\nworking on folder: {subdir}")
-        TextExtractor(input_path, os.path.join(transcript_dir,output_file))
+        TextExtractor(input_path, transcript_dir / output_file)
 

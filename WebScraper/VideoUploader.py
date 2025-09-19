@@ -8,8 +8,10 @@ from selenium.webdriver.support.wait import WebDriverWait
 from seleniumbase import Driver
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from ProxyUtil import *
-from VideoTranscriptJobDescriptor import *
+from DataProcessing import RAW_VIDEO_FOLDER, HTML_OUTPUT_FOLDER
+from WebScraper import PROXY_FILE
+from WebScraper.ProxyUtil import *
+from WebScraper.VideoTranscriptJobDescriptor import *
 
 
 class JobStatus(Enum):
@@ -148,7 +150,7 @@ def MainUploadLoop (driver,language='english',max_retries=3,threadName="Noname")
 
 
 
-def upload_video(job:VideoTranscriptJobDescriptor, proxy:object = None , headless_Mode = False):
+def upload_video(job:VideoTranscriptJobDescriptor, proxy:dict[str] = None , headless_Mode = False):
     job.Lock.acquire()
     if job.IsCompleted:
         job.Lock.release()
@@ -179,7 +181,7 @@ def upload_video(job:VideoTranscriptJobDescriptor, proxy:object = None , headles
             file_input = driver.find_element(By.ID, "file-input")
         except Exception:
             raise PageUnreachable
-        file_input.send_keys(job.VideoName)
+        file_input.send_keys(str(job.VideoPath))
 
         if job.Lock.locked():
             print(f"{threadName}: Waiting on lock acquisition")
@@ -228,7 +230,7 @@ def upload_video(job:VideoTranscriptJobDescriptor, proxy:object = None , headles
         # Save the HTML output
         # At this point, all paragraphs should be loaded
         text_area_HTML = text_area.get_attribute("innerHTML")
-        html_filename = job.GetOutputFilePath()
+        html_filename = job.GetHTMLOutputFilePath()
         # Ensure the directory exists
         os.makedirs(os.path.dirname(html_filename), exist_ok=True)
         with open(html_filename, "w", encoding="utf-8") as f:
@@ -251,14 +253,14 @@ def upload_video(job:VideoTranscriptJobDescriptor, proxy:object = None , headles
 
 
 
-def try_upload(jobDesc:VideoTranscriptJobDescriptor, proxy:str, headless_mode = False) ->JobStatus:
+def try_upload(jobDesc:VideoTranscriptJobDescriptor, proxy:dict[str], headless_mode = False) ->JobStatus:
     try:
-        upload_video(jobDesc, proxy,headless_mode)
+        upload_video(jobDesc, proxy, headless_mode)
         return JobStatus.Success  # Success
     except PageUnreachable:
         return JobStatus.PageConnectionError
     except Exception as e :
-        print(f"Exception : {e}")
+        print(f"Try_update Exception : {e}")
         return JobStatus.GenericError
 
 
@@ -288,9 +290,8 @@ def fetch_proxies():
 
 
 
-def UploadVideos(BYPASS_PROXY =False, Input_folder="data", output_folder ="transcript" , headless_Mode = False):
+def UploadVideos(BYPASS_PROXY =False, Input_folder=RAW_VIDEO_FOLDER, output_folder = HTML_OUTPUT_FOLDER , headless_Mode = False):
     MAX_AGE_SECONDS = 1800
-    PROXY_FILE =  'proxy_list.json'
     MAX_RETRIES = 3
     proxy_failures = {}  # Track consecutive failures for each proxy
 
@@ -310,15 +311,8 @@ def UploadVideos(BYPASS_PROXY =False, Input_folder="data", output_folder ="trans
         print(f"Downloaded {len(proxy_list)} proxies and saved to file {PROXY_FILE}")
 
 
-    video_jobs = GenerateJobsFromVideo(Input_folder)
-    for job in video_jobs:
-        job.SetOutputFolder(output_folder)
-        html_filename =job.GetOutputFilePath()
+    video_jobs = GenerateJobsFromVideo(Input_folder, output_folder)
 
-        if os.path.isfile(html_filename):
-            job.IsCompleted = True
-
-    
     
     while len(proxy_list)>0:
         incomplete_jobs = [job for job in video_jobs if not job.IsCompleted]

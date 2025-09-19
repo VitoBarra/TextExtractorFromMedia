@@ -7,8 +7,7 @@
 /dataSources/
 /dataSources.local.xml
 
-data/
-transcript/
-WebScrapingTest/
+DataProcessing/*/
+WebScraper/*/
 .idea/
 downloaded_files/

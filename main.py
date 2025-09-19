@@ -1,20 +1,17 @@
-﻿from SpiltVideo import *
-from TextExtractor import *
-from VideoUploader import *
+﻿from DataProcessing import RAW_VIDEO_FOLDER, HTML_OUTPUT_FOLDER, OUTPUT_TRANSCRIPT
+from DataProcessing.SplitVideo import SplitVideoInFolder
+from DataProcessing.TextExtractor import ExtractTextFromFolder
+from WebScraper.VideoUploader import UploadVideos
 
 # --- Settings ---
-VIDEO_FOLDER = "data"
-OUTPUT_FOLDER = "transcript"
-
 
 HEADLESS_MODE = True
 
-
 if __name__ == '__main__':
-    SplitVideoInFolder(VIDEO_FOLDER, 30)
-    jobToDo= True
+    SplitVideoInFolder(RAW_VIDEO_FOLDER, 30)
+    jobToDo = True
     while jobToDo:
-        jobToDo = not UploadVideos(False, VIDEO_FOLDER, OUTPUT_FOLDER, HEADLESS_MODE)
-    ExtractTextFromFolder(OUTPUT_FOLDER)
+        jobToDo = not UploadVideos(False, RAW_VIDEO_FOLDER, HTML_OUTPUT_FOLDER, HEADLESS_MODE)
+    ExtractTextFromFolder(HTML_OUTPUT_FOLDER,OUTPUT_TRANSCRIPT)
 
 
