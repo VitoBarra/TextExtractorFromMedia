@@ -1,37 +1,39 @@
-﻿import os
+import os
 from pathlib import Path
 
-from DataProcessing import RAW_VIDEO_FOLDER, HTML_OUTPUT_FOLDER, OUTPUT_TRANSCRIPT, RAW_AUDIO_FOLDER, \
-    OUTPUT_PROCESSED_AUDIO, AUDIO_EXTENSIONS
-from DataProcessing.AudioCleaner import enhance_audio_in_chunks
+from DataProcessing import RAW_VIDEO_FOLDER, RAW_AUDIO_FOLDER, \
+    SPLITTED_VIDEO_FOLDER, HTML_OUTPUT_FOLDER, OUTPUT_TRANSCRIPT, ENHANCED_AUDIO_FOLDER
+from DataProcessing.AudioEnhancer import enhance_audio_in_chunks
 from DataProcessing.AudioToText import transcribe_audio
-from DataProcessing.SplitVideo import SplitVideoInFolder
-from DataProcessing.TextExtractor import ExtractTextFromFolder
-from WebScraper.VideoUploader import UploadVideos
+from DataProcessing.HTMLToMDConverter import ExtractTextFromFolder
+from DataProcessing.MediaSplitter import SplitVideoInFolder
+from WebScraper.VzardAIUploader import UploadVideoFolder
+
+
 
 # --- Settings ---
 
 HEADLESS_MODE = True
 
 def ProcessVideo():
-    SplitVideoInFolder(RAW_VIDEO_FOLDER, 30)
+    SplitVideoInFolder(RAW_VIDEO_FOLDER,SPLITTED_VIDEO_FOLDER, 30)
     jobToDo = True
     while jobToDo:
-        jobToDo = not UploadVideos(False, RAW_VIDEO_FOLDER, HTML_OUTPUT_FOLDER, HEADLESS_MODE)
+        jobToDo = not UploadVideoFolder( RAW_VIDEO_FOLDER, HTML_OUTPUT_FOLDER, HEADLESS_MODE)
     ExtractTextFromFolder(HTML_OUTPUT_FOLDER,OUTPUT_TRANSCRIPT)
 
 def ProcessAudio():
     files = [Path(f) for f in os.listdir(RAW_AUDIO_FOLDER) if os.path.isfile(RAW_AUDIO_FOLDER/ f)]
-    audioProjects = [Path(dir).name for dir in os.listdir(OUTPUT_PROCESSED_AUDIO) if os.path.isdir(OUTPUT_PROCESSED_AUDIO / dir)]
+    audioProjects = [Path(dir).name for dir in os.listdir(ENHANCED_AUDIO_FOLDER) if os.path.isdir(ENHANCED_AUDIO_FOLDER / dir)]
     files_NotEnhanced = [f for f in files if f.stem not in audioProjects]
 
     for f in files_NotEnhanced:
         enhance_audio_in_chunks(
             input_file=RAW_AUDIO_FOLDER/ f.name,
-            output_file=OUTPUT_PROCESSED_AUDIO/f.stem/f"{f.stem}.wav",
-            raw_chunk_dir=OUTPUT_PROCESSED_AUDIO/f.stem/"RawAudioChunk",
-            enhanced_chunk_dir=OUTPUT_PROCESSED_AUDIO/f.stem/"enhancedAudioChunk",
-            chunk_duration=20,
+            output_file=ENHANCED_AUDIO_FOLDER/f.stem/f"{f.stem}.wav",
+            raw_chunk_dir=ENHANCED_AUDIO_FOLDER/f.stem/"RawAudioChunk",
+            enhanced_chunk_dir=ENHANCED_AUDIO_FOLDER/f.stem/"enhancedAudioChunk",
+            chunk_duration=60*15,
             lowcut=100,
             highcut=6000,
             compress_threshold_db=-30,
@@ -40,7 +42,7 @@ def ProcessAudio():
         )
 
     for f in files:
-        transcribe_audio(OUTPUT_PROCESSED_AUDIO/f.stem/f"{f.stem}.wav", model_size="medium",
+        transcribe_audio(ENHANCED_AUDIO_FOLDER/f.stem/f"{f.stem}.wav", model_size="medium",
                          save_to=OUTPUT_TRANSCRIPT/f.stem/"transcript.md")
 
 if __name__ == '__main__':

@@ -58,10 +58,4 @@ def GenerateJobsFromVideo(video_folder: Path | str, out_folder_html: Path | str)
                 ]
             )
 
-        # Check if the job already complete
-        for job in jobs:
-            html_filename = job.GetHTMLOutputFilePath()
-            if os.path.isfile(html_filename):
-                job.IsCompleted = True
-
     return jobs

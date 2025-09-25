@@ -2,10 +2,15 @@ import ipaddress
 
 import requests
 from requests.exceptions import RequestException
+
+from Utility.FileUtil import ReadJson, WriteJson, IsModifiedRecently
+from WebScraper import PROXY_FILE
 from swiftshadow.classes import ProxyInterface
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
+
+
 
 def test_proxy(ip, port, test_url="https://httpbin.org/ip", use_https=False):
     proxy = f"{ip}:{port}"
@@ -46,12 +51,9 @@ def fetch_proxies():
         if response.text == "":
             print("No proxies found")
             return []
-        proxy_list = response.text.strip().split('\n')
+        proxy_list = response.text.strip().split('\r\n')
         proxy_obj = [{"ip": ip, "port": port} for ip, port in (proxy.split(':') for proxy in proxy_list)]
         proxy_obj = [proxy for proxy in proxy_obj if is_valid_ip(proxy["ip"])]
-
-        for proxy in proxy_obj:
-            print(f"IP: {proxy['ip']}, Port: {proxy['port']}")
 
         return proxy_obj
     else:
@@ -112,3 +114,18 @@ def fetch_proxy_swiftshadow(find_https = True):
         proxy_list.append({"ip":proxy.ip,"port":proxy.port})
     return proxy_list
 
+
+def getProxyList(proxy_file=PROXY_FILE, MAX_AGE_SECONDS = 1800):
+     # Check if file is recent and use it, otherwise call the function
+    if IsModifiedRecently(proxy_file, MAX_AGE_SECONDS):
+        proxy_list = ReadJson(proxy_file)
+        print(f"Loaded {len(proxy_list)} proxies from file {proxy_file}")
+        if len(proxy_list) != 0:
+            return proxy_list
+
+    print("...finding new proxy")
+    proxy_list = fetch_proxies()
+    WriteJson(proxy_file, proxy_list)
+    print(f"Downloaded {len(proxy_list)} proxies and saved to file {proxy_file}")
+
+    return proxy_list

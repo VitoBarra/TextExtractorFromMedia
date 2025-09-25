@@ -1,62 +1,20 @@
-﻿import json
-import time
+﻿import time
 from enum import Enum
 
-from selenium.common import TimeoutException
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 from seleniumbase import Driver
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from DataProcessing import RAW_VIDEO_FOLDER, HTML_OUTPUT_FOLDER
-from WebScraper import PROXY_FILE
+from DataProcessing import HTML_OUTPUT_FOLDER, SPLITTED_VIDEO_FOLDER
 from WebScraper.ProxyUtil import *
 from WebScraper.VideoTranscriptJobDescriptor import *
-
-
-class JobStatus(Enum):
-    Success = 0
-    PageConnectionError = 1
-    GenericError = 2
-
-class PageUnreachable(BaseException):
-    pass
-
+from WebScraper.WebScrapingUtility import find_element_if_present, click_element_if_clickable, JobStatus, \
+    PageUnreachable
 
 # --- Settings ---
 UPLOAD_URL = "https://vizard.ai/upload?from=video-to-text&tool-page=%2Fen%2Ftools%2Fvideo-to-text"
 WAIT_TIME_AFTER_UPLOAD = 60 * 10
-
-# Helper functions for better readability
-def find_element_if_present(driver, by, value, timeout=1):
-    """ Finds an element, returns the element if found within the timeout, otherwise None. """
-    try:
-        return WebDriverWait(driver, timeout).until(
-            EC.presence_of_element_located((by, value))
-        )
-    except TimeoutException:
-        return None
-
-
-def click_element_if_clickable(driver, element, timeout=5, threadName = "noname"):
-    """ Clicks an element if it becomes clickable within the timeout. Returns True if clicked, False otherwise. """
-    if not element:
-        return False
-    try:
-        # Pass the element itself, not the locator tuple
-        clickable_element = WebDriverWait(driver, timeout).until(
-            EC.element_to_be_clickable(element)
-        )
-        clickable_element.click()
-        return True
-    except TimeoutException:
-        print(f"{threadName}: Element found but not clickable within {timeout}s.")
-        return False
-    except Exception as e:
-        print(f"{threadName}: Error during click: {e}")
-        return
-
-
 
 
 
@@ -161,16 +119,13 @@ def upload_video(job:VideoTranscriptJobDescriptor, proxy:dict[str] = None , head
     threadName = threading.get_ident()
 
 
+
     ConditionSettedByMe = False
 
     driver = None
     try:
-        if proxy is not None:
-            proxy_string =f"{proxy['ip']}:{proxy['port']}"
-            driver = Driver(uc=True, headless=headless_Mode, proxy=proxy_string )
-        else:
-            # initialize the driver in GUI mode with UC enabled
-            driver = Driver(uc=True, headless=headless_Mode)
+        driver = Driver(uc=True, headless=headless_Mode,
+                        proxy=f"{proxy['ip']}:{proxy['port']}" if proxy is not None else None )
 
         # Refresh the page before each upload (optional, depends on the site)
         try:
@@ -263,63 +218,28 @@ def try_upload(jobDesc:VideoTranscriptJobDescriptor, proxy:dict[str], headless_m
         print(f"Try_update Exception : {e}")
         return JobStatus.GenericError
 
-
-def has_fresh_content(file_path, max_age_seconds):
+def UploadVideoFolder(Input_folder=SPLITTED_VIDEO_FOLDER, output_folder = HTML_OUTPUT_FOLDER, headless_Mode = False):
     """
-    Check if a file exists and was modified within the specified time frame.
-    
-    Args:
-        file_path (str): Path to the file to check
-        max_age_seconds (int): Maximum age in seconds to consider the file as fresh
-        
-    Returns:
-        bool: True if file exists and was modified within max_age_seconds, False otherwise
+    :param Input_folder:
+    :param output_folder:
+    :param headless_Mode:
+    :return: true if all jobs completed successfully
     """
-    if not os.path.exists(file_path):
-        return False
-    file_mtime = os.path.getmtime(file_path)
-    return (time.time() - file_mtime) < max_age_seconds
-
-
-def fetch_proxies():
-    """Fetches proxies, trying HTTPS first by default."""
-    try:
-        return fetch_proxy_swiftshadow(True)
-    except Exception:
-        return fetch_proxy_swiftshadow(False)
-
-
-
-def UploadVideos(BYPASS_PROXY =False, Input_folder=RAW_VIDEO_FOLDER, output_folder = HTML_OUTPUT_FOLDER , headless_Mode = False):
     MAX_AGE_SECONDS = 1800
     MAX_RETRIES = 3
     proxy_failures = {}  # Track consecutive failures for each proxy
 
-    if BYPASS_PROXY:
-        proxy_list = [None]
-        # Check if file is recent and use it, otherwise call the function
-    elif has_fresh_content(PROXY_FILE, MAX_AGE_SECONDS):
-        proxy_list = ReadJson(PROXY_FILE)
-        print(f"Loaded {len(proxy_list)} proxies from file {PROXY_FILE}")
-        if len(proxy_list) == 0:
-            print ("...finding new proxy")
-            proxy_list = fetch_proxies()
-            WriteJson(PROXY_FILE, proxy_list)
-    else:
-        proxy_list = fetch_proxies()
-        WriteJson(PROXY_FILE,proxy_list)
-        print(f"Downloaded {len(proxy_list)} proxies and saved to file {PROXY_FILE}")
 
-
+    proxy_list = getProxyList(PROXY_FILE,MAX_AGE_SECONDS)
     video_jobs = GenerateJobsFromVideo(Input_folder, output_folder)
 
-    
-    while len(proxy_list)>0:
-        incomplete_jobs = [job for job in video_jobs if not job.IsCompleted]
+    incomplete_jobs = [job for job in video_jobs if not os.path.isfile(job.GetHTMLOutputFilePath())]
 
-        if not incomplete_jobs:
-            print("All transcription jobs completed successfully")
-            break
+    if not incomplete_jobs:
+        print("All transcription jobs completed successfully")
+        return True
+
+    while len(proxy_list)>0:
 
         for job in incomplete_jobs:
             if job.Lock.locked():
@@ -341,6 +261,7 @@ def UploadVideos(BYPASS_PROXY =False, Input_folder=RAW_VIDEO_FOLDER, output_fold
                     if status == JobStatus.Success:
                         print(f"Job {job} completed successfully with proxy {proxy_str}")
                         job.IsCompleted = True
+                        incomplete_jobs.remove(job)
                         break
                     elif status == JobStatus.PageConnectionError:
                         proxy_list.remove(proxy)  # Remove non-working proxy for next job
