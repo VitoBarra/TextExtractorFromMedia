@@ -2,7 +2,7 @@ import os
 import threading
 import json
 from pathlib import Path
-from DataProcessing import VIDEO_EXTENSIONS
+from DataProcessing import VIDEO_EXTENSIONS, AUDIO_EXTENSIONS
 from Utility.FileUtil import ReadJson, WriteJson
 
 
@@ -35,7 +35,7 @@ def GenerateJobsFromVideo(video_folder: Path | str, out_folder_html: Path | str)
         root_path = Path(root)
         if root_path.name.lower() == video_folder.name.lower():
             continue
-        video_files = [f for f in files if f.lower().endswith(VIDEO_EXTENSIONS)]
+        video_files = [f for f in files if f.lower().endswith(VIDEO_EXTENSIONS+AUDIO_EXTENSIONS)]
         metadata_file = root_path / "metadata.json"
 
         if video_files:
