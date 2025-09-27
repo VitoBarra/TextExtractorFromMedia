@@ -1,8 +1,9 @@
-﻿import ffmpeg
-from pathlib import Path
-import numpy as np
-import shutil
+﻿import shutil
 from enum import Enum
+from pathlib import Path
+
+import ffmpeg
+import numpy as np
 
 from DataProcessing.ffmpegUtil import safe_probe
 

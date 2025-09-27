@@ -1,7 +1,8 @@
 ﻿import os
 import sys
-from chardet.universaldetector import UniversalDetector
+
 from bs4 import BeautifulSoup
+from chardet.universaldetector import UniversalDetector
 
 from DataProcessing import OUTPUT_TRANSCRIPT, HTML_OUTPUT_FOLDER
 

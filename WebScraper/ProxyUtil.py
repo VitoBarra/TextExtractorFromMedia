@@ -2,14 +2,13 @@ import ipaddress
 
 import requests
 from requests.exceptions import RequestException
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from swiftshadow.classes import ProxyInterface
 
 from Utility.FileUtil import ReadJson, WriteJson, IsModifiedRecently
 from WebScraper import PROXY_FILE
-from swiftshadow.classes import ProxyInterface
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
-
 
 
 def test_proxy(ip, port, test_url="https://httpbin.org/ip", use_https=False):

@@ -1,5 +1,5 @@
 from DataProcessing import RAW_VIDEO_FOLDER, RAW_AUDIO_FOLDER, \
-    SPLITTED_AUDIO_FOLDER, SPLITTED_VIDEO_FOLDER, HTML_OUTPUT_FOLDER, OUTPUT_TRANSCRIPT, ENHANCED_AUDIO_FOLDER
+    SPLITTED_AUDIO_FOLDER, HTML_OUTPUT_FOLDER, OUTPUT_TRANSCRIPT, ENHANCED_AUDIO_FOLDER
 from DataProcessing.AudioEnhancer import EnhanceAudioFolder
 from DataProcessing.AudioExtractor import AudioFormat, VideoFolderToAudio
 from DataProcessing.HTMLToMDConverter import ExtractTextFromFolder

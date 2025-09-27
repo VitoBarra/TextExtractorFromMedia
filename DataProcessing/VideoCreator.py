@@ -1,6 +1,6 @@
 from pathlib import Path
+
 from moviepy import AudioFileClip, ColorClip
-from enum import Enum
 
 from DataProcessing import AUDIO_EXTENSIONS, VIDEO_EXTENSIONS
 from DataProcessing.ffmpegUtil import get_video_settings, VideoFormat

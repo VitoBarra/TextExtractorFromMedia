@@ -1,10 +1,9 @@
 ﻿import time
-from enum import Enum
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 from seleniumbase import Driver
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from DataProcessing import HTML_OUTPUT_FOLDER, SPLITTED_VIDEO_FOLDER
 from WebScraper.ProxyUtil import *

@@ -1,10 +1,10 @@
+import os
 from pathlib import Path
 
-import numpy as np
-import os
-from scipy.signal import butter, lfilter
 import noisereduce as nr
+import numpy as np
 import soundfile as sf
+from scipy.signal import butter, lfilter
 
 from DataProcessing import AUDIO_EXTENSIONS
 from DataProcessing.ffmpegUtil import get_audio_settings, AudioFormat

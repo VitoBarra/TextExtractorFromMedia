@@ -1,5 +1,7 @@
-import ffmpeg
 from enum import Enum
+
+import ffmpeg
+
 
 class VideoFormat(Enum):
     MP4 = "mp4"

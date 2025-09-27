@@ -1,7 +1,8 @@
+import json
 import os
 import threading
-import json
 from pathlib import Path
+
 from DataProcessing import VIDEO_EXTENSIONS, AUDIO_EXTENSIONS
 from Utility.FileUtil import ReadJson, WriteJson
 

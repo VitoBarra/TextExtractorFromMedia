@@ -1,6 +1,7 @@
-from pathlib import Path
-from moviepy import VideoFileClip
 import os
+from pathlib import Path
+
+from moviepy import VideoFileClip
 
 from DataProcessing import AUDIO_EXTENSIONS
 from DataProcessing.ffmpegUtil import AudioFormat, get_audio_settings
