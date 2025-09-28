@@ -1,6 +1,14 @@
+import sys
 from pathlib import Path
 
-DATA_PROC_BASE_DIR = Path(__file__).parent
+
+if getattr(sys, 'frozen', False):
+    # in installed app
+    DATA_PROC_BASE_DIR = Path(sys.executable).parent
+else:
+    # in normal python environment
+    DATA_PROC_BASE_DIR = Path(__file__).parent
+
 
 RAW_AUDIO_FOLDER = DATA_PROC_BASE_DIR / "1.1-RawAUDIO"
 RAW_VIDEO_FOLDER = DATA_PROC_BASE_DIR / "1.2-RawVIDEO"
