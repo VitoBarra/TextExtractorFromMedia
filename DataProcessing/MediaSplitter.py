@@ -6,6 +6,7 @@ import ffmpeg
 import numpy as np
 
 from DataProcessing.ffmpegUtil import safe_probe
+from Utility.Logger import error, warning, info
 
 
 class MediaMode(Enum):
@@ -34,14 +35,6 @@ def split_media(input_path: Path,
                 overwrite: bool = False):
     """
     Split a media file (audio or video) into fixed-duration chunks.
-
-    Args:
-        input_path (Path): Input media file.
-        output_dir (Path): Output folder where chunks are stored.
-        chunk_duration_s (int): Chunk size in seconds.
-        mode (MediaMode | None): Explicit mode, or None = auto-detect.
-        audio_sr (int): Sample rate for audio mode.
-        overwrite (bool): If True, overwrite existing output_dir.
     """
     input_path = Path(input_path)
     if not input_path.exists():
@@ -50,7 +43,7 @@ def split_media(input_path: Path,
     # Auto-detect if not provided
     if mode is None:
         mode = detect_media_mode(input_path)
-        print(f"🔍 Auto-detected mode: {mode.value}")
+        info(f"Auto-detected mode: {mode.value}")
 
     # Prepare output dir
     basename = input_path.stem
@@ -64,7 +57,7 @@ def split_media(input_path: Path,
     duration = float(probe["format"]["duration"])
     num_chunks = int(np.ceil(duration / chunk_duration_s))
 
-    print(f"⏱ {basename}: {duration:.2f}s total, {num_chunks} chunks of {chunk_duration_s}s")
+    info(f"{basename}: {duration:.2f}s total, {num_chunks} chunks of {chunk_duration_s}s")
 
     for i in range(num_chunks):
         start = i * chunk_duration_s
@@ -88,10 +81,9 @@ def split_media(input_path: Path,
         else:
             raise ValueError("Unsupported MediaMode")
 
-        print(f"   ✔ Saved {outfile.name} ({end - start:.2f}s)")
+        info(f"Saved chunk: {outfile.name} ({end - start:.2f}s)")
 
-    print(f"✅ Done! Chunks saved in {file_outdir}")
-
+    info(f"Done splitting '{basename}'. Chunks saved in '{file_outdir}'.")
 
 
 def SplitMediaInFolder(input_directory: Path,
@@ -100,45 +92,38 @@ def SplitMediaInFolder(input_directory: Path,
                        overwrite: bool = False):
     """
     Splits all media files in a folder into chunks (audio or video).
-
-    Args:
-        input_directory (Path): Folder containing media files.
-        out_dir (Path): Base folder where outputs will be stored.
-        chunk_duration_s (int): Duration of each chunk in seconds. Default 30 min.
-        overwrite (bool): If True, overwrite existing outputs.
     """
     input_directory = Path(input_directory)
     out_dir = Path(out_dir)
 
-    # Gather all files (basic filter to skip hidden/system files)
+    # Gather all files
     files_to_process = [f for f in input_directory.iterdir() if f.is_file()]
 
     if not files_to_process:
-        print(f"No media files found in directory: '{input_directory}'")
+        warning(f"No media files found in directory: '{input_directory}'")
         return
 
-    print(f"📂 Found {len(files_to_process)} files to process in {input_directory}")
+    info(f"Found {len(files_to_process)} files to process in '{input_directory}'")
 
     for file_path in files_to_process:
         basename = file_path.stem
         expected_output_dir = out_dir / basename
 
-        print(f"\n--- Checking file: {file_path.name} ---")
+        info(f"Processing file: {file_path.name}")
 
         if expected_output_dir.is_dir() and not overwrite:
-            print(f"⚠️ Output '{expected_output_dir}' already exists. Skipping.")
+            warning(f"Output '{expected_output_dir}' already exists. Skipping.")
             continue
 
-        print(f"▶️ Splitting {file_path.name} ...")
         try:
             split_media(
                 input_path=file_path,
                 output_dir=out_dir,
                 chunk_duration_s=chunk_duration_s,
-                mode=None,           # auto-detect (video/audio)
+                mode=None,  # auto-detect (video/audio)
                 overwrite=overwrite
             )
         except Exception as e:
-            print(f"❌ Error while splitting {file_path.name}: {e}")
+            error(f"Error while splitting '{file_path.name}': {e}")
 
-    print("\n✅ All processing complete")
+    info("All processing complete.")

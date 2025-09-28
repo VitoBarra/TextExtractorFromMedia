@@ -5,9 +5,10 @@ from moviepy import VideoFileClip
 
 from DataProcessing import AUDIO_EXTENSIONS
 from DataProcessing.ffmpegUtil import AudioFormat, get_audio_settings
+from Utility.Logger import info, warning, error
 
 
-def extract_audio_from_video(input_video_path, output_audio_path=None, audio_format=AudioFormat.WAV):
+def ExtractAudioFromVideo(input_video_path, output_audio_path=None, audio_format=AudioFormat.WAV):
     """
     Extracts audio from a video file and saves it to an audio file.
 
@@ -20,7 +21,7 @@ def extract_audio_from_video(input_video_path, output_audio_path=None, audio_for
         video_clip = VideoFileClip(input_video_path)
         audio_clip = video_clip.audio
         if audio_clip is None:
-            print("No audio track found in the video.")
+            warning(f"No audio track found in the video '{input_video_path}'.")
             return
 
         # If no output path, generate one automatically
@@ -33,11 +34,10 @@ def extract_audio_from_video(input_video_path, output_audio_path=None, audio_for
 
         audio_clip.close()
         video_clip.close()
-        print(f"Audio extracted and saved to {output_audio_path} as {audio_format.value.upper()}")
+        info(f"Audio extracted and saved to '{output_audio_path}' as {audio_format.value.upper()}")
 
     except Exception as e:
-        print(f"An error occurred: {e}")
-
+        error(f"An error occurred while extracting audio from '{input_video_path}': {e}")
 
 def VideoFolderToAudio(input_directory: Path,
                        out_dir: Path,
@@ -58,10 +58,10 @@ def VideoFolderToAudio(input_directory: Path,
 
     files_to_process = [f for f in input_directory.iterdir() if f.is_file()]
     if not files_to_process:
-        print(f"No media files found in directory: '{input_directory}'")
+        warning(f"No media files found in directory '{input_directory}'.")
         return
 
-    print(f"📂 Found {len(files_to_process)} files to process in '{input_directory}'")
+    info(f"Found {len(files_to_process)} files to process in '{input_directory}'")
 
     failed_files = []
 
@@ -69,12 +69,12 @@ def VideoFolderToAudio(input_directory: Path,
         basename = file_path.stem
         audio_output_path = out_dir / f"{basename}.{audio_format.value}"
 
-        print(f"\n--- [{idx}/{len(files_to_process)}] Processing file: {file_path.name} ---")
+        info(f"Processing file [{idx}/{len(files_to_process)}]: {file_path.name}")
 
-        # Check if ANY audio file with the same basename already exists
+        # Skip if any audio file with same basename exists
         existing = list(out_dir.glob(f"{basename}.*"))
         if any(f.suffix.lower() in AUDIO_EXTENSIONS for f in existing) and not overwrite:
-            print(f"⚠️ An audio file with name '{basename}' already exists. Skipping.")
+            warning(f"An audio file with name '{basename}' already exists. Skipping.")
             continue
 
         try:
@@ -82,25 +82,26 @@ def VideoFolderToAudio(input_directory: Path,
             audio_clip = video_clip.audio
 
             if audio_clip is None:
-                print(f"⚠️ No audio track found in {file_path.name}. Skipping.")
+                warning(f"No audio track found in '{file_path.name}'. Skipping.")
                 video_clip.close()
                 failed_files.append(file_path.name)
                 continue
+
             codec, bitrate = get_audio_settings(audio_format)
             audio_clip.write_audiofile(str(audio_output_path), codec=codec, bitrate=bitrate)
 
             audio_clip.close()
             video_clip.close()
-            print(f"✅ Audio extracted to '{audio_output_path.name}'")
+            info(f"Audio extracted to '{audio_output_path.name}'")
 
         except Exception as e:
-            print(f"❌ Error processing {file_path.name}: {e}")
+            error(f"Error processing '{file_path.name}': {e}")
             failed_files.append(file_path.name)
 
-    print("\n🎉 Audio extraction complete!")
+    info("Audio extraction complete.")
     if failed_files:
-        print(f"⚠️ {len(failed_files)} files failed to process:")
+        warning(f"{len(failed_files)} files failed to process:")
         for f in failed_files:
-            print(f"  - {f}")
+            warning(f"  - {f}")
     else:
-        print("✅ All files processed successfully!")
+        info("All files processed successfully.")

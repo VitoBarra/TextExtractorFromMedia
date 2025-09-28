@@ -4,6 +4,7 @@ from DataProcessing.AudioEnhancer import EnhanceAudioFolder
 from DataProcessing.AudioExtractor import AudioFormat, VideoFolderToAudio
 from DataProcessing.HTMLToMDConverter import ExtractTextFromFolder
 from DataProcessing.MediaSplitter import SplitMediaInFolder
+from Utility.Logger import setup_logger
 from WebScraper.VzardAIUploader import UploadVideoFolder
 
 # --- Settings ---
@@ -11,6 +12,7 @@ from WebScraper.VzardAIUploader import UploadVideoFolder
 HEADLESS_MODE = True
 
 if __name__ == '__main__':
+    setup_logger()
     VideoFolderToAudio(RAW_VIDEO_FOLDER, RAW_AUDIO_FOLDER, AudioFormat.WAV, overwrite=False)
     SplitMediaInFolder(RAW_AUDIO_FOLDER, SPLITTED_AUDIO_FOLDER, 60 * 15)
     EnhanceAudioFolder(SPLITTED_AUDIO_FOLDER, ENHANCED_AUDIO_FOLDER, AudioFormat.WAV,
@@ -22,7 +24,7 @@ if __name__ == '__main__':
     )
     jobToDo = True
     while jobToDo:
-        jobToDo = not UploadVideoFolder(SPLITTED_AUDIO_FOLDER, HTML_OUTPUT_FOLDER, HEADLESS_MODE)
+        jobToDo = not UploadVideoFolder( SPLITTED_AUDIO_FOLDER, HTML_OUTPUT_FOLDER, HEADLESS_MODE)
     ExtractTextFromFolder(HTML_OUTPUT_FOLDER, OUTPUT_TRANSCRIPT)
 
 
