@@ -14,13 +14,13 @@ from WebScraper.VzardAIUploader import UploadVideoFolder
 # --- Settings ---
 HEADLESS_MODE = True
 
-def AudioPipeline():
+def AudioPipeline(split_minutes: int):
     info("Converting videos to audio...")
     VideoFolderToAudio(RAW_VIDEO_FOLDER, RAW_AUDIO_FOLDER, AudioFormat.WAV, overwrite=False)
     info("Video-to-audio conversion complete.")
 
-    info("Splitting audio files into 15-minute chunks...")
-    SplitMediaInFolder(RAW_AUDIO_FOLDER, SPLITTED_AUDIO_FOLDER, 60 * 30)
+    info(f"Splitting audio files into {split_minutes}-minute chunks...")
+    SplitMediaInFolder(RAW_AUDIO_FOLDER, SPLITTED_AUDIO_FOLDER, 60 * split_minutes)
     info("Audio splitting complete.")
 
     info("Enhancing audio files (filtering, compression, gain)...")
@@ -47,13 +47,13 @@ def AudioPipeline():
     info("Transcript extraction complete.")
 
 
-def VideoPipeline():
+def VideoPipeline(split_minutes: int):
     info("Converting audio to video...")
     AudioFolderToVideo(RAW_AUDIO_FOLDER, RAW_VIDEO_FOLDER, VideoFormat.MP4, overwrite=False)
     info("Audio-to-video conversion complete.")
 
-    info("Splitting videos into 30-minute chunks...")
-    SplitMediaInFolder(RAW_VIDEO_FOLDER, SPLITTED_VIDEO_FOLDER, 60 * 30)
+    info(f"Splitting videos into {split_minutes}-minute chunks...")
+    SplitMediaInFolder(RAW_VIDEO_FOLDER, SPLITTED_VIDEO_FOLDER, 60 * split_minutes)
     info("Video splitting complete.")
 
     info("Uploading video chunks for transcription...")
@@ -74,7 +74,15 @@ def main():
         choices=["audio", "video"],
         help="Choose which pipeline to run: 'audio' or 'video'"
     )
+    parser.add_argument(
+        "-s", "--split",
+        type=int,
+        default=15,
+        help="Split length in minutes for audio/video chunks (default: 30)"
+    )
     args = parser.parse_args()
+
+    split_minutes = args.split
 
     if not args.pipeline:
         console.print("Select a pipeline to run:")
@@ -92,10 +100,10 @@ def main():
 
     if args.pipeline == "audio":
         info("Starting Audio Pipeline...\n")
-        AudioPipeline()
+        AudioPipeline(split_minutes)
     elif args.pipeline == "video":
         info("Starting Video Pipeline...\n")
-        VideoPipeline()
+        VideoPipeline(split_minutes)
 
 
 if __name__ == '__main__':
