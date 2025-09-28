@@ -11,3 +11,4 @@ noisereduce
 numpy
 ffmpeg-python
 pyinstaller
+rich==14.1.0
