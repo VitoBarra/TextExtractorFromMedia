@@ -175,11 +175,13 @@ def try_upload(jobDesc: VideoTranscriptJobDescriptor, proxy: dict[str], headless
         return JobStatus.GenericError
 
 
-def UploadVideoFolder(Input_folder=SPLITTED_VIDEO_FOLDER, output_folder=HTML_OUTPUT_FOLDER, headless_Mode=False):
+def UploadVideoFolder(Input_folder=SPLITTED_VIDEO_FOLDER, output_folder=HTML_OUTPUT_FOLDER,
+                      headless_Mode=False, workers:int=8) -> bool:
     """
     :param Input_folder:
     :param output_folder:
     :param headless_Mode:
+    :param workers:
     :return: true if all jobs completed successfully
     """
     MAX_AGE_SECONDS = 1800
@@ -200,7 +202,7 @@ def UploadVideoFolder(Input_folder=SPLITTED_VIDEO_FOLDER, output_folder=HTML_OUT
                 continue
             info(f"Processing transcription job: {job}")
 
-            with ThreadPoolExecutor(max_workers=8) as executor:
+            with ThreadPoolExecutor(max_workers=workers) as executor:
                 proxyTried = 0
                 futures = {executor.submit(try_upload, job, proxy, headless_Mode): proxy for proxy in proxy_list}
                 proxy_to_try = len(proxy_list)
