@@ -1,0 +1,56 @@
+FROM scottyhardy/docker-wine
+
+WORKDIR /src
+
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3 \
+        python3-pip \
+        python3-venv \
+        binutils \
+        build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create a virtual environment
+RUN python3 -m venv /opt/venv
+
+# Use the virtual environment by default
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy only requirements first for caching
+COPY requirements.txt /src/
+
+# Install Python dependencies in the venv
+RUN /opt/venv/bin/pip install --upgrade pip && \
+    if [ -f requirements.txt ]; then /opt/venv/bin/pip install -r requirements.txt; fi && \
+    /opt/venv/bin/pip install pyinstaller
+
+# Copy the rest of the project files
+COPY . /src
+
+# Build arguments
+ARG APP_NAME=MediaTranscriber
+ARG SRC=main.py
+ARG MODE=release
+
+# Export arguments as environment variables
+ENV APP_NAME=${APP_NAME} \
+    SRC=${SRC} \
+    MODE=${MODE}
+
+# Set PyInstaller options based on MODE
+ENV PYI_OPTS="--onefile --clean --noconfirm"
+RUN if [ "$MODE" = "release" ]; then \
+        export PYI_OPTS="$PYI_OPTS --strip --noconsole"; \
+    else \
+        export PYI_OPTS="$PYI_OPTS --debug=all"; \
+    fi && \
+    echo "PYI_OPTS set to: $PYI_OPTS"
+
+# Build command using the virtual environment
+CMD bash -c "\
+    source /opt/venv/bin/activate && \
+    mkdir -p /src/deploy && \
+    pyinstaller $PYI_OPTS --distpath /src/deploy --name ${APP_NAME}.exe $SRC && \
+    echo 'Windows build complete!'"

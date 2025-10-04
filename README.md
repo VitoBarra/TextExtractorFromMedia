@@ -95,7 +95,7 @@ cd TextExtractorFromMedia
 ```
 ### 2. Install Python dependencies
 ```bash
-pip install -r requirement.txt
+pip install -r requirements.txt
 ```
 
 

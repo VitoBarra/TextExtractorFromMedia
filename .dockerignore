@@ -1,0 +1,14 @@
+# .dockerignore (project root)
+
+# Exclude folders
+DataProcessing/1.1-RawAUDIO
+DataProcessing/1.2-RawVIDEO
+DataProcessing/2.1-SplittedAUDIO
+DataProcessing/2.2-SplittedVIDEO
+DataProcessing/3-HTML
+DataProcessing/4-Transcript
+
+# Exclude files
+.venv
+.git
+.gitignore

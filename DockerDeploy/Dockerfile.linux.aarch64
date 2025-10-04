@@ -1,0 +1,54 @@
+# Use official multi-arch Python image
+FROM python:3.13-slim
+
+WORKDIR /src
+
+# Install required system packages
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3-venv \
+        python3-pip \
+        binutils \
+        build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements.txt
+COPY requirements.txt /src/
+
+# Create a virtual environment and install Python dependencies
+RUN python -m venv /opt/venv && \
+    /opt/venv/bin/pip install --upgrade pip && \
+    /opt/venv/bin/pip install -r requirements.txt && \
+    /opt/venv/bin/pip install pyinstaller
+
+# Copy the rest of the project files
+COPY . /src
+
+# Use the virtual environment by default
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Build arguments
+ARG APP_NAME=MediaTranscriber
+ARG SRC=main.py
+ARG MODE=release
+
+# Export arguments as environment variables
+ENV APP_NAME=${APP_NAME} \
+    SRC=${SRC} \
+    MODE=${MODE}
+
+# Set PyInstaller options based on MODE
+ENV PYI_OPTS="--onefile --clean --noconfirm"
+RUN if [ "$MODE" = "release" ]; then \
+        export PYI_OPTS="$PYI_OPTS --strip --noconsole"; \
+    else \
+        export PYI_OPTS="$PYI_OPTS --debug=all"; \
+    fi && \
+    echo "PYI_OPTS set to: $PYI_OPTS"
+
+# Build command using the virtual environment
+CMD bash -c "\
+    source /opt/venv/bin/activate && \
+    mkdir -p /src/deploy && \
+    pyinstaller $PYI_OPTS --distpath /src/deploy --name ${APP_NAME}-aarch64 $SRC && \
+    echo 'Linux aarch64 build complete!'"
