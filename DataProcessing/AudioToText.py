@@ -4,45 +4,57 @@ import whisper
 from whisper import transcribe
 
 from DataProcessing import AUDIO_EXTENSIONS
-from Utility.Logger import info, warning, error
+from Utility.Logger import Logger
 
 
-def TranscribeAudioFolder(input_dir: Path,
-                          out_dir: Path,
-                          model_size: str = "small",
-                          overwrite: bool = False):
+def TranscribeAudioFolder(
+    input_dir: Path,
+    out_dir: Path,
+    model_size: str = "small",
+    overwrite: bool = False,
+):
     """
-    Transcribes all audio projects in a folder structure using Whisper.
+    Transcribes all audio projects in a folder structure using OpenAI Whisper.
+
+    Args:
+        input_dir (Path): Directory containing project subfolders with audio chunks.
+        out_dir (Path): Output directory where transcriptions will be saved.
+        model_size (str): Whisper model size (e.g., 'tiny', 'base', 'small', 'medium', 'large').
+        overwrite (bool): Whether to overwrite existing transcriptions.
     """
     input_dir = Path(input_dir)
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Load Whisper model once
-    info(f"Loading Whisper model: {model_size}")
-    model = whisper.load_model(model_size)
+    Logger.info(f"Loading Whisper model: {model_size}")
+    try:
+        model = whisper.load_model(model_size)
+    except Exception as e:
+        Logger.error(f"Failed to load Whisper model '{model_size}': {e}")
+        return
 
     projects = [p for p in input_dir.iterdir() if p.is_dir()]
     if not projects:
-        warning(f"No projects found in {input_dir}")
+        Logger.warning(f"No projects found in {input_dir}")
         return
 
-    info(f"Found {len(projects)} projects to process in '{input_dir}'")
+    Logger.info(f"Found {len(projects)} projects to process in '{input_dir}'")
 
     failed_projects = []
 
     for project in projects:
         project_name = project.name
-        info(f"Processing project: {project_name}")
+        Logger.info(f"Processing project: {project_name}")
 
         project_out_dir = out_dir / project_name
         transcripts_dir = project_out_dir / "transcripts"
         transcripts_dir.mkdir(parents=True, exist_ok=True)
 
-        chunks = sorted([f for f in project.iterdir()
-                         if f.is_file() and f.suffix.lower() in AUDIO_EXTENSIONS])
+        chunks = sorted(
+            [f for f in project.iterdir() if f.is_file() and f.suffix.lower() in AUDIO_EXTENSIONS]
+        )
         if not chunks:
-            warning(f"No audio chunks found in {project_name}. Skipping.")
+            Logger.warning(f"No audio chunks found in '{project_name}'. Skipping.")
             failed_projects.append(project_name)
             continue
 
@@ -52,13 +64,13 @@ def TranscribeAudioFolder(input_dir: Path,
             txt_file = transcripts_dir / f"{chunk_file.stem}.txt"
 
             if txt_file.exists() and not overwrite:
-                info(f"Transcript for {chunk_file.name} already exists. Skipping.")
+                Logger.info(f"Transcript for '{chunk_file.name}' already exists. Skipping.")
                 continue
 
             try:
-                info(f"Transcribing chunk {idx}/{len(chunks)}: {chunk_file.name}")
-                result = transcribe(model, str(chunk_file))
-                transcription = result["text"]
+                Logger.info(f"Transcribing chunk {idx}/{len(chunks)}: {chunk_file.name}")
+                result = transcribe(str(chunk_file))
+                transcription = result.get("text", "").strip()
 
                 with open(txt_file, "w", encoding="utf-8") as f:
                     f.write(transcription)
@@ -66,7 +78,7 @@ def TranscribeAudioFolder(input_dir: Path,
                 combined_transcription.append(transcription)
 
             except Exception as e:
-                error(f"Error transcribing {chunk_file.name}: {e}")
+                Logger.error(f"Error transcribing '{chunk_file.name}': {e}")
                 failed_projects.append(project_name)
                 break
 
@@ -74,16 +86,16 @@ def TranscribeAudioFolder(input_dir: Path,
         if combined_transcription:
             project_txt = project_out_dir / f"{project_name}.txt"
             if project_txt.exists() and not overwrite:
-                info(f"Combined transcription already exists for {project_name}. Skipping.")
+                Logger.info(f"Combined transcription already exists for '{project_name}'. Skipping.")
             else:
                 with open(project_txt, "w", encoding="utf-8") as f:
                     f.write("\n\n".join(combined_transcription))
-                info(f"Combined transcription saved to: {project_txt}")
+                Logger.info(f"Combined transcription saved to: {project_txt}")
 
-    info("Transcription complete.")
+    Logger.info("Transcription complete.")
     if failed_projects:
-        warning(f"{len(failed_projects)} projects failed:")
+        Logger.warning(f"{len(failed_projects)} projects failed:")
         for p in failed_projects:
-            warning(f"  - {p}")
+            Logger.warning(f"  - {p}")
     else:
-        info("All projects processed successfully.")
+        Logger.info("All projects processed successfully.")

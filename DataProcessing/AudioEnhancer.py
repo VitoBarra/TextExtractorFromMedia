@@ -8,7 +8,7 @@ from scipy.signal import butter, lfilter
 
 from DataProcessing import AUDIO_EXTENSIONS
 from DataProcessing.ffmpegUtil import get_audio_settings, AudioFormat
-from Utility.Logger import info, warning, error
+from Utility.Logger import Logger
 
 
 # === Utility Functions ===
@@ -28,7 +28,7 @@ def load_audio_chunk(file_path):
             audio_data = np.mean(audio_data, axis=1)
         return audio_data, sr
     except Exception as e:
-        error(f"Error loading audio chunk {file_path}: {e}")
+        Logger.error(f"Error loading audio chunk '{file_path}': {e}")
         raise
 
 
@@ -60,11 +60,11 @@ def save_audio(audio_data, sr, file_path, codec=None, bitrate=None):
         else:
             raise ValueError(f"Unsupported file format: {file_path}")
     except Exception as e:
-        error(f"Error saving audio to {file_path}: {e}")
+        Logger.error(f"Error saving audio to '{file_path}': {e}")
         raise
 
 
-# === Processing Functions ===
+# === Audio Processing Functions ===
 def butter_bandpass(lowcut, highcut, fs, order=6):
     nyq = 0.5 * fs
     low = lowcut / nyq
@@ -111,8 +111,9 @@ def EnhanceAudioFolder(input_dir: Path,
                        gain_db=6,
                        overwrite: bool = False):
     """
-    Enhances all audio projects in a folder structure. Each project has multiple chunks.
-    Skips chunks that are already processed unless overwrite=True.
+    Enhances all audio projects in a folder structure.
+    Each project has multiple chunks.
+    Skips chunks already processed unless overwrite=True.
     """
     input_dir = Path(input_dir)
     out_dir = Path(out_dir)
@@ -120,15 +121,15 @@ def EnhanceAudioFolder(input_dir: Path,
 
     projects = [p for p in input_dir.iterdir() if p.is_dir()]
     if not projects:
-        warning(f"No projects found in {input_dir}")
+        Logger.warning(f"No projects found in '{input_dir}'")
         return
 
-    info(f"Found {len(projects)} projects to process in '{input_dir}'")
+    Logger.info(f"Found {len(projects)} projects to process in '{input_dir}'")
     failed_projects = []
 
     for project in projects:
         project_name = project.name
-        info(f"Processing project: {project_name}")
+        Logger.info(f"Processing project: '{project_name}'")
 
         project_out_dir = out_dir / project_name
         enhanced_chunk_dir = project_out_dir / "enhanced_chunks"
@@ -140,20 +141,20 @@ def EnhanceAudioFolder(input_dir: Path,
         chunks = sorted([f for f in project.iterdir()
                          if f.is_file() and f.suffix.lower() in AUDIO_EXTENSIONS])
         if not chunks:
-            warning(f"No audio chunks found in {project_name}. Skipping.")
+            Logger.warning(f"No audio chunks found in '{project_name}'. Skipping.")
             failed_projects.append(project_name)
             continue
 
-        info(f"Found {len(chunks)} chunks in {project_name}")
+        Logger.info(f"Found {len(chunks)} chunks in '{project_name}'")
 
         for idx, chunk_file in enumerate(chunks, start=1):
-            info(f"Processing chunk {idx}/{len(chunks)}: {chunk_file.name}")
+            Logger.info(f"Processing chunk {idx}/{len(chunks)}: '{chunk_file.name}'")
 
             try:
                 enhanced_chunk_file = enhanced_chunk_dir / f"{chunk_file.stem}_enhanced.wav"
 
                 if enhanced_chunk_file.exists() and not overwrite:
-                    info(f"Enhanced chunk already exists: {enhanced_chunk_file.name}. Skipping.")
+                    Logger.info(f"Enhanced chunk exists: '{enhanced_chunk_file.name}'. Skipping.")
                     chunk, sr = load_audio_chunk(enhanced_chunk_file)
                     enhanced_chunks.append(chunk)
                     continue
@@ -169,17 +170,25 @@ def EnhanceAudioFolder(input_dir: Path,
                 enhanced_chunks.append(enhanced)
 
             except Exception as e:
-                error(f"Error processing chunk {chunk_file.name}: {e}")
+                Logger.error(f"Error processing chunk '{chunk_file.name}': {e}")
                 failed_projects.append(project_name)
                 break
 
+        # Save concatenated final audio
         if enhanced_chunks:
             final_audio = np.concatenate(enhanced_chunks)
             final_file = project_out_dir / f"{project_name}.{audio_format.value}"
 
             if final_file.exists() and not overwrite:
-                info(f"Final file already exists for {project_name}. Skipping save.")
+                Logger.info(f"Final file exists for '{project_name}'. Skipping save.")
             else:
                 codec, bitrate = get_audio_settings(audio_format)
                 save_audio(final_audio, sr, final_file, codec=codec, bitrate=bitrate)
-                info(f"Final enhanced audio saved to: {final_file}")
+                Logger.info(f"Final enhanced audio saved to: '{final_file}'")
+
+    if failed_projects:
+        Logger.warning(f"{len(failed_projects)} projects failed during enhancement:")
+        for p in failed_projects:
+            Logger.warning(f"  - {p}")
+    else:
+        Logger.info("All projects enhanced successfully.")

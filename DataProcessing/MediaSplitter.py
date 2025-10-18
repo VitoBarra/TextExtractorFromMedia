@@ -6,7 +6,7 @@ import ffmpeg
 import numpy as np
 
 from DataProcessing.ffmpegUtil import safe_probe
-from Utility.Logger import error, warning, info
+from Utility.Logger import Logger
 
 
 class MediaMode(Enum):
@@ -43,7 +43,7 @@ def split_media(input_path: Path,
     # Auto-detect if not provided
     if mode is None:
         mode = detect_media_mode(input_path)
-        info(f"Auto-detected mode: {mode.value}")
+        Logger.info(f"Auto-detected mode: {mode.value}")
 
     # Prepare output dir
     basename = input_path.stem
@@ -57,7 +57,7 @@ def split_media(input_path: Path,
     duration = float(probe["format"]["duration"])
     num_chunks = int(np.ceil(duration / chunk_duration_s))
 
-    info(f"{basename}: {duration:.2f}s total, {num_chunks} chunks of {chunk_duration_s}s")
+    Logger.info(f"{basename}: {duration:.2f}s total, {num_chunks} chunks of {chunk_duration_s}s")
 
     for i in range(num_chunks):
         start = i * chunk_duration_s
@@ -79,11 +79,12 @@ def split_media(input_path: Path,
                       .run(overwrite_output=True, quiet=True)
             )
         else:
+            Logger.error(f"Failed to split chunk {chunk_name}: Unsupported MediaMode")
             raise ValueError("Unsupported MediaMode")
 
-        info(f"Saved chunk: {outfile.name} ({end - start:.2f}s)")
+        Logger.info(f"Saved chunk: {outfile.name} ({end - start:.2f}s)")
 
-    info(f"Done splitting '{basename}'. Chunks saved in '{file_outdir}'.")
+    Logger.info(f"Done splitting '{basename}'. Chunks saved in '{file_outdir}'.")
 
 
 def SplitMediaInFolder(input_directory: Path,
@@ -100,19 +101,19 @@ def SplitMediaInFolder(input_directory: Path,
     files_to_process = [f for f in input_directory.iterdir() if f.is_file()]
 
     if not files_to_process:
-        warning(f"No media files found in directory: '{input_directory}'")
+        Logger.warning(f"No media files found in directory: '{input_directory}'")
         return
 
-    info(f"Found {len(files_to_process)} files to process in '{input_directory}'")
+    Logger.info(f"Found {len(files_to_process)} files to process in '{input_directory}'")
 
     for file_path in files_to_process:
         basename = file_path.stem
         expected_output_dir = out_dir / basename
 
-        info(f"Processing file: {file_path.name}")
+        Logger.info(f"Processing file: {file_path.name}")
 
         if expected_output_dir.is_dir() and not overwrite:
-            warning(f"Output '{expected_output_dir}' already exists. Skipping.")
+            Logger.info(f"Output '{expected_output_dir}' already exists. Skipping.")
             continue
 
         try:
@@ -124,6 +125,6 @@ def SplitMediaInFolder(input_directory: Path,
                 overwrite=overwrite
             )
         except Exception as e:
-            error(f"Error while splitting '{file_path.name}': {e}")
+            Logger.error(f"Error while splitting '{file_path.name}': {e}")
 
-    info("All processing complete.")
+    Logger.info("All processing complete.")

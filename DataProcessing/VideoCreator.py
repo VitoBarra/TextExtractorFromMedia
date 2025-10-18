@@ -1,13 +1,13 @@
 from pathlib import Path
-
 from moviepy import AudioFileClip, ColorClip
 
 from DataProcessing import AUDIO_EXTENSIONS, VIDEO_EXTENSIONS
 from DataProcessing.ffmpegUtil import get_video_settings, VideoFormat
-from Utility.Logger import info, error, warning
+from Utility.Logger import Logger
 
 VIDEO_SIZE = (1280, 720)
 VIDEO_COLOR = (0, 0, 0)  # black
+
 
 def CreateVideoFromAudio(input_audio_path, output_video_path, video_format=VideoFormat.MP4):
     """
@@ -25,14 +25,19 @@ def CreateVideoFromAudio(input_audio_path, output_video_path, video_format=Video
 
         black_clip.close()
         audio_clip.close()
-        info(f"Video created: {output_video_path}")
+        Logger.info(f"Video created: {output_video_path}")
 
     except Exception as e:
-        error(f"An error occurred while creating video from '{input_audio_path}': {e}")
+        Logger.error(f"An error occurred while creating video from '{input_audio_path}': {e}")
         raise
 
 
-def AudioFolderToVideo(input_directory: Path, out_dir: Path, video_format: VideoFormat = VideoFormat.MP4, overwrite=False):
+def AudioFolderToVideo(
+    input_directory: Path,
+    out_dir: Path,
+    video_format: VideoFormat = VideoFormat.MP4,
+    overwrite: bool = False,
+):
     """
     Converts all audio files in a folder to videos with a black screen.
     Skips if a video with the same base name already exists in any format.
@@ -42,12 +47,15 @@ def AudioFolderToVideo(input_directory: Path, out_dir: Path, video_format: Video
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # Collect audio files
-    files_to_process = [f for f in input_directory.iterdir() if f.is_file() and f.suffix.lower() in AUDIO_EXTENSIONS]
+    files_to_process = [
+        f for f in input_directory.iterdir()
+        if f.is_file() and f.suffix.lower() in AUDIO_EXTENSIONS
+    ]
     if not files_to_process:
-        warning(f"No audio files found in directory: '{input_directory}'")
+        Logger.warning(f"No audio files found in directory: '{input_directory}'")
         return
 
-    info(f"Found {len(files_to_process)} files to process in '{input_directory}'")
+    Logger.info(f"Found {len(files_to_process)} files to process in '{input_directory}'")
 
     failed_files = []
 
@@ -55,11 +63,12 @@ def AudioFolderToVideo(input_directory: Path, out_dir: Path, video_format: Video
         basename = file_path.stem
         video_output_path = out_dir / f"{basename}.{video_format.value}"
 
-        info(f"Processing file [{idx}/{len(files_to_process)}]: {file_path.name}")
+        Logger.info(f"Processing file [{idx}/{len(files_to_process)}]: {file_path.name}")
 
+        # Skip if a video already exists
         existing = list(out_dir.glob(f"{basename}.*"))
         if any(f.suffix.lower() in VIDEO_EXTENSIONS for f in existing) and not overwrite:
-            warning(f"A video with name '{basename}' already exists. Skipping.")
+            Logger.info(f"A video with name '{basename}' already exists. Skipping.")
             continue
 
         try:
@@ -67,10 +76,11 @@ def AudioFolderToVideo(input_directory: Path, out_dir: Path, video_format: Video
         except Exception:
             failed_files.append(file_path.name)
 
-    info("Audio to video conversion complete.")
+    Logger.info("Audio to video conversion complete.")
+
     if failed_files:
-        warning(f"{len(failed_files)} files failed to process:")
+        Logger.warning(f"{len(failed_files)} files failed to process:")
         for f in failed_files:
-            warning(f"  - {f}")
+            Logger.warning(f"  - {f}")
     else:
-        info("All files processed successfully.")
+        Logger.info("All files processed successfully.")

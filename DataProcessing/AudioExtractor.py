@@ -1,11 +1,10 @@
 import os
 from pathlib import Path
-
 from moviepy import VideoFileClip
 
 from DataProcessing import AUDIO_EXTENSIONS
 from DataProcessing.ffmpegUtil import AudioFormat, get_audio_settings
-from Utility.Logger import info, warning, error
+from Utility.Logger import Logger
 
 
 def ExtractAudioFromVideo(input_video_path, output_audio_path=None, audio_format=AudioFormat.WAV):
@@ -13,15 +12,15 @@ def ExtractAudioFromVideo(input_video_path, output_audio_path=None, audio_format
     Extracts audio from a video file and saves it to an audio file.
 
     Parameters:
-    - input_video_path: str, path to the input video file
-    - output_audio_path: str, path to save the extracted audio (optional)
-    - audio_format: AudioFormat enum, choose the format (WAV, MP3, FLAC, OGG)
+        input_video_path (str): Path to the input video file.
+        output_audio_path (str): Path to save the extracted audio (optional).
+        audio_format (AudioFormat): Choose the format (WAV, MP3, FLAC, OGG).
     """
     try:
         video_clip = VideoFileClip(input_video_path)
         audio_clip = video_clip.audio
         if audio_clip is None:
-            warning(f"No audio track found in the video '{input_video_path}'.")
+            Logger.warning(f"No audio track found in the video '{input_video_path}'.")
             return
 
         # If no output path, generate one automatically
@@ -34,10 +33,11 @@ def ExtractAudioFromVideo(input_video_path, output_audio_path=None, audio_format
 
         audio_clip.close()
         video_clip.close()
-        info(f"Audio extracted and saved to '{output_audio_path}' as {audio_format.value.upper()}")
+        Logger.info(f"Audio extracted and saved to '{output_audio_path}' as {audio_format.value.upper()}")
 
     except Exception as e:
-        error(f"An error occurred while extracting audio from '{input_video_path}': {e}")
+        Logger.error(f"An error occurred while extracting audio from '{input_video_path}': {e}")
+
 
 def VideoFolderToAudio(input_directory: Path,
                        out_dir: Path,
@@ -48,7 +48,7 @@ def VideoFolderToAudio(input_directory: Path,
 
     Args:
         input_directory (Path): Folder containing video files.
-        out_dir (Path): Base folder where audio outputs will be stored.
+        out_dir (Path): Folder where audio outputs will be stored.
         audio_format (AudioFormat): Desired audio format.
         overwrite (bool): If True, overwrite existing audio files.
     """
@@ -58,10 +58,10 @@ def VideoFolderToAudio(input_directory: Path,
 
     files_to_process = [f for f in input_directory.iterdir() if f.is_file()]
     if not files_to_process:
-        warning(f"No media files found in directory '{input_directory}'.")
+        Logger.warning(f"No media files found in directory '{input_directory}'.")
         return
 
-    info(f"Found {len(files_to_process)} files to process in '{input_directory}'")
+    Logger.info(f"Found {len(files_to_process)} files to process in '{input_directory}'")
 
     failed_files = []
 
@@ -69,12 +69,12 @@ def VideoFolderToAudio(input_directory: Path,
         basename = file_path.stem
         audio_output_path = out_dir / f"{basename}.{audio_format.value}"
 
-        info(f"Processing file [{idx}/{len(files_to_process)}]: {file_path.name}")
+        Logger.info(f"Processing file [{idx}/{len(files_to_process)}]: {file_path.name}")
 
-        # Skip if any audio file with same basename exists
+        # Skip if audio with same basename already exists
         existing = list(out_dir.glob(f"{basename}.*"))
         if any(f.suffix.lower() in AUDIO_EXTENSIONS for f in existing) and not overwrite:
-            warning(f"An audio file with name '{basename}' already exists. Skipping.")
+            Logger.info(f"An audio file named '{basename}' already exists. Skipping.")
             continue
 
         try:
@@ -82,7 +82,7 @@ def VideoFolderToAudio(input_directory: Path,
             audio_clip = video_clip.audio
 
             if audio_clip is None:
-                warning(f"No audio track found in '{file_path.name}'. Skipping.")
+                Logger.warning(f"No audio track found in '{file_path.name}'. Skipping.")
                 video_clip.close()
                 failed_files.append(file_path.name)
                 continue
@@ -92,16 +92,17 @@ def VideoFolderToAudio(input_directory: Path,
 
             audio_clip.close()
             video_clip.close()
-            info(f"Audio extracted to '{audio_output_path.name}'")
+            Logger.info(f"Audio extracted to '{audio_output_path.name}'")
 
         except Exception as e:
-            error(f"Error processing '{file_path.name}': {e}")
+            Logger.error(f"Error processing '{file_path.name}': {e}")
             failed_files.append(file_path.name)
 
-    info("Audio extraction complete.")
+    Logger.info("Audio extraction complete.")
+
     if failed_files:
-        warning(f"{len(failed_files)} files failed to process:")
+        Logger.warning(f"{len(failed_files)} files failed to process:")
         for f in failed_files:
-            warning(f"  - {f}")
+            Logger.warning(f"  - {f}")
     else:
-        info("All files processed successfully.")
+        Logger.info("All files processed successfully.")

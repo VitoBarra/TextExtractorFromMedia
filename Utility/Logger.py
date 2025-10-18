@@ -1,45 +1,91 @@
 import logging
-
+from enum import Enum
 from rich.console import Console
 from rich.logging import RichHandler
 
-console = Console()
 
-def setup_logger(name: str = "pipeline", level: str = "INFO", show_path_dev: bool = True) -> logging.Logger:
-    logger = logging.getLogger(name)
-    if logger.hasHandlers():
-        logger.handlers.clear()
+class LogLevel(Enum):
+    DEBUG = logging.DEBUG
+    INFO = logging.INFO
+    WARNING = logging.WARNING
+    ERROR = logging.ERROR
+    CRITICAL = logging.CRITICAL
 
 
-    handler = RichHandler(
-        console=console,
-        show_time=False,
-        show_path=False,
-        markup=True,
-        rich_tracebacks=True,
-        show_level=True
-    )
-    formatter = logging.Formatter("%(message)s")
-    handler.setFormatter(formatter)
+class Logger:
+    _console = Console()
+    _logger: logging.Logger | None = None
 
-    logger.setLevel(getattr(logging, level.upper(), logging.INFO))
-    logger.addHandler(handler)
-    logger.propagate = False
-    return logger
+    @staticmethod
+    def setup(
+        name: str = "pipeline",
+        level: LogLevel = LogLevel.INFO,
+        show_path_dev: bool = True,
+    ) -> None:
+        """
+        Initialize the logger with Rich formatting.
+        """
+        logger = logging.getLogger(name)
+        if logger.hasHandlers():
+            logger.handlers.clear()
 
-log = setup_logger()
-# === Helper functions with Rich markup ===
-def info(msg: str):
-    log.info(f"[white]{msg}[/]")
+        handler = RichHandler(
+            console=Logger._console,
+            show_time=False,
+            show_path=show_path_dev,
+            markup=True,
+            rich_tracebacks=True,
+            show_level=True,
+        )
 
-def warning(msg: str):
-    log.warning(f"[yellow]{msg}[/]")
+        formatter = logging.Formatter("%(message)s")
+        handler.setFormatter(formatter)
 
-def error(msg: str):
-    log.error(f"[bold red]{msg}[/]")
+        logger.setLevel(level.value)
+        handler.setLevel(level.value)
 
-def debug(msg: str):
-    log.debug(f"[dim]{msg}[/]")
+        logger.addHandler(handler)
+        logger.propagate = False
 
-def critical(msg: str):
-    log.critical(f"[bold red on white]{msg}[/]")
+        Logger._logger = logger
+
+    @staticmethod
+    def _IsInitialized():
+        if Logger._logger is None:
+            raise RuntimeError("Logger not initialized. Call Logger.setup() first.")
+
+    # === Static helper log methods ===
+    @staticmethod
+    def debug(msg: str):
+        Logger._IsInitialized()
+        Logger._logger.debug(f"[dim]{msg}[/]")
+
+    @staticmethod
+    def info(msg: str):
+        Logger._IsInitialized()
+        Logger._logger.info(f"[white]{msg}[/]")
+
+    @staticmethod
+    def warning(msg: str):
+        Logger._IsInitialized()
+        Logger._logger.warning(f"[yellow]{msg}[/]")
+
+    @staticmethod
+    def error(msg: str):
+        Logger._IsInitialized()
+        Logger._logger.error(f"[bold red]{msg}[/]")
+
+    @staticmethod
+    def critical(msg: str):
+        Logger._IsInitialized()
+        Logger._logger.critical(f"[bold red on white]{msg}[/]")
+
+    @staticmethod
+    def GetLogger() -> logging.Logger:
+        Logger._IsInitialized()
+        return Logger._logger
+
+    @ staticmethod
+    def GetConsole() -> Console:
+        Logger._IsInitialized()
+        return Logger._console
